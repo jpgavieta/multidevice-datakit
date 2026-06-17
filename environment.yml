@@ -1,0 +1,20 @@
+name: multidevice_dataviz
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pandas
+  - numpy
+  - requests
+  - tzfpy
+  - folium
+  - plotly
+  - ipykernel
+  - pip
+  - pip:
+      - jupyter_viewer   
+
+  # conda env create -f environment.yml   
+  # conda activate multidevice_dataviz   
+  # jupyter_viewer  # to launch html viewer
