@@ -81,7 +81,7 @@ def transform_device_data(
 #          transformed["Atmotube"]["C3CBE16AE294_01-May-2026_12-Jun-2026"]["gis"]                   # GIS DataFrame for that device_id
 
 
-def clean_data_dict(processed_data: dict, selected: dict[str, list[str]]) -> dict:
+def clean_data_dict(processed_data: dict, selected: dict[str, list[str]]) -> dict: # Was used before not being used now
     """
     NOTE: still written for the OLD shape ({device_type: {"gis":..., "data":...}})
     and needs an extra device_id loop before it matches the new nested output

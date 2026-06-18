@@ -22,9 +22,9 @@ def _resolve_targets(dfs, df_names, skip):
 
 
 def report_loss(device, *df_names):
-    skip    = {"all"}
+    skip    = {"all", "gis"}
     dfs     = {k: v["df"] for k, v in device["data"].items()}
-    dfs["gis"] = device["raw_gis"]                                  # to see missing lon/lat shit
+    # dfs["gis"] = device["raw_gis"]                                  # to see missing lon/lat shit
     targets = _resolve_targets(dfs, df_names, skip)
     if targets is None:
         return

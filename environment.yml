@@ -12,6 +12,8 @@ dependencies:
   - plotly
   - ipykernel
   - ydata-profiling
+  - setuptools
+  - jupyterlabs_server 
   - pip
   - pip:
       - jupyter_viewer   
