@@ -305,6 +305,7 @@ def build_raw_gis_df(df):
         gis_df = rename_cols(gis_df, ["alt"], "altitude")
     return gis_df
 
+
 # ============================================================================================================
 # For any df (general use)
 
@@ -357,6 +358,26 @@ def rename_cols(df, *args, silent=False):
 # Example: rename_cols(df, ["pm", "2", "5"], "pm2_5")               # generic skip warnings on
 # Example: rename_cols(df, ["pm", "2", "5"], "pm2_5", silent=True)  # suppress skip warnings
 
+def extract_dfs(source: dict) -> dict:
+    """
+    Normalize a "subdivided dfs" input into a flat {table_name: df} dict.
+    For accepting subdivided per-device dataframes (shared input in stats.py modules).
+
+    Accepts either:
+    - the per-device dict produced by transform_device_data()
+        (has a "data" key: {table_name: {"df": df, "cols": [...]}})
+    - the flat dict returned directly by a parser's parse()
+        (table_name: df)
+
+    Lets downstream functions (report_loss, profile_df, check_ranges, etc.)
+    accept either shape without each reimplementing this check.
+    """
+    if "data" in source:
+        return {k: v["df"] for k, v in source["data"].items()}
+    return {k: v for k, v in source.items() if isinstance(v, pd.DataFrame)}
+
+# Example: extract_dfs(transformed["Atmotube"][device_id])  # device-dict shape
+# Example: extract_dfs(atmotube.parse(raw_df))               # flat parser-output shape
 
 # ============================================================================================================
 # # Color Registry

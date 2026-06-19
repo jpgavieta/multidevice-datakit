@@ -40,11 +40,7 @@ The data pipeline starts from whereever the data is kept (either shared folder p
 |   └── analysis.ipynb          # Analyses the data for all available devices 
 
 | 
-├── environment.yml             
-|                     
-└── docs/                       # Documentation per device
-    ├── Atmotube_datasheet.md
-    └── etc.
+└── environment.yml             
 ```
 
  

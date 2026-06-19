@@ -1,17 +1,15 @@
 import pandas as pd
 
-from ydata_profiling import ProfileReport
-from ydata_profiling import ProfileReport
-from ydata_profiling.config import Settings
+from src.utils import extract_dfs
 
 
-# def _get_numeric_cols(df):
-#     """Return all numeric columns except datetime, date, time."""
-#     skip = {"datetime", "date", "time"}
-#     return [
-#         col for col in df.columns
-#         if col not in skip and pd.api.types.is_numeric_dtype(df[col])
-#     ]
+def _get_numeric_cols(df):
+    """Return all numeric columns except datetime, date, time."""
+    skip = {"datetime", "date", "time"}
+    return [
+        col for col in df.columns
+        if col not in skip and pd.api.types.is_numeric_dtype(df[col])
+    ]
 
 def _resolve_targets(dfs, df_names, skip):
     """Resolve which dfs to operate on."""
@@ -26,8 +24,8 @@ def _resolve_targets(dfs, df_names, skip):
 
 def report_loss(device, *df_names):
     skip    = {"all", "gis,", "raw_gis"}
-    dfs     = {k: v["df"] for k, v in device["data"].items()}
-    dfs["gis"] = device["raw_gis"]                                  # to see missing lon/lat shit
+    dfs     = extract_dfs(device)
+    dfs["gis"] = device["raw_gis"] # to see missing lon/lat shit
     targets = _resolve_targets(dfs, df_names, skip)
     if targets is None:
         return
@@ -49,20 +47,6 @@ def report_loss(device, *df_names):
 # report_loss(d1)              # all tables
 # report_loss(d1, "pm")        # just pm
 # report_loss(d1, "pm", "gas") # pm and gas
-
-# def profile_df(df, title=None):
-#     """Generate an interactive profile report for a dataframe.
-
-#     Parameters
-#     ----------
-#     df    : pd.DataFrame
-#     title : str, optional
-#     """
-#     from ydata_profiling import ProfileReport
-#     return ProfileReport(df, title=title, minimal=False)
-
-# # Example: profile_df(d1["data"]["pm"]["df"], title="PM - Device 1").to_notebook_iframe()
-# # Example: profile_df(d1["all"], title="All - Device 1").to_notebook_iframe()
 
 def profile_df(device, table=None, title=None, minimal=False, theme="flatly",
                 exclude_cols=None, timeseries_col="datetime"):
@@ -93,19 +77,21 @@ def profile_df(device, table=None, title=None, minimal=False, theme="flatly",
     ProfileReport object
     """
     from ydata_profiling import ProfileReport
-
-    if "all" not in device or "data" not in device:
-        raise KeyError("Device must contain 'all' and 'data' keys")
+    # from ydata_profiling.config import Settings # to customize config settings 
 
     if table is None:
-        df = device["all"].copy()
+        df = device.get("all")
+        if df is None:
+            raise KeyError("Device has no 'all' merged dataframe to profile — pass a table name instead")
+        df = df.copy()
         if title is None:
             title = "Merged Data (All Tables)"
     else:
-        if table not in device["data"]:
-            available = list(device["data"].keys())
+        dfs = extract_dfs(device)
+        if table not in dfs:
+            available = [k for k in dfs if k not in {"all", "gis", "raw_gis"}]
             raise KeyError(f"Table '{table}' not found. Available tables: {available}")
-        df = device["data"][table]["df"].copy()
+        df = dfs[table].copy()
         if title is None:
             title = f"Device Data - {table.upper()}"
 
