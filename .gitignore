@@ -1,7 +1,26 @@
 __pycache__/
 *.pyc
 *.py[cod]
+*.so
+.Python
 
 .ipynb_checkpoints/
-*.ipynb_checkpoints
+*.ipynb_checkpoints/
 
+# ydata-profiling reports
+*profile_report.html
+*_profile_report.html
+profile_reports/
+*.html
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE (only personal settings, not workspace config)
+.idea/
+*.swp
+
+# OS
+.DS_Store
