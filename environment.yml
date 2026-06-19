@@ -11,12 +11,10 @@ dependencies:
   - folium>=0.14
   - plotly>=5.14
   - ipykernel # For running notebooks in VSCode
-  - jupyterlab_server>=2.20 # Only this for juypter-viewer
   - pip>=23.0
   - pip:
       - setuptools<70.0 # has to be depreciated for ydata-profiling
       - ydata-profiling>=4.6.0
-      - jupyter_viewer>=0.2.0
 
 
 # In the VSCode terminal:
