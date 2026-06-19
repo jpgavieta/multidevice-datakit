@@ -4,19 +4,20 @@ channels:
   - defaults
 dependencies:
   - python=3.12
-  - pandas
-  - numpy
-  - requests
+  - pandas>=2.0
+  - numpy>=1.24
+  - requests>=2.28
   - tzfpy
-  - folium
-  - plotly
-  - ipykernel
-  - ydata-profiling
-  - setuptools
-  - jupyterlabs_server 
-  - pip
+  - folium>=0.14
+  - plotly>=5.14
+  - ipykernel # For running notebooks in VSCode
+  - jupyterlab_server>=2.20 # Only this for juypter-viewer
+  - pip>=23.0
   - pip:
-      - jupyter_viewer   
+      - setuptools>=70.0
+      - ydata-profiling>=4.6.0
+      - jupyter-viewer>=0.2.0
+
 
 # In the VSCode terminal:
   # conda env create -f environment.yml   

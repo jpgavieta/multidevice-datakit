@@ -121,6 +121,5 @@ def profile_df(device, table=None, title=None, minimal=False):
 # Example: report = profile_df(d1, table="weather", title="Device 1 - Weather Data") # With custom title
 
 # for table_name in ["pm", "gas", "weather", "phone", "sat", "txt"]: # Profile all tables for a device
-    # report = profile_df(d1, table=table_name)#     report = profile_df(d1, table=table_name)
-
-    # etc...
+#   report = profile_df(d1, table=table_name)#     report = profile_df(d1, table=table_name)
+#   etc...
