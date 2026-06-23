@@ -400,7 +400,7 @@ def skim(data, device_type=None, device_id=None, df_key=None, col=None):
         print(f"  df.shape: {df.shape}")  # optional quick sanity line
         for c in df.columns:
             s = df[c]
-            # (len, dtype) in a similar style to your device summaries
+            # (len, dtype) in a similar style to device summaries
             print(f"  {c:25s}: ({len(s)}, {s.dtype})")
         return df
 
@@ -418,108 +418,103 @@ def skim(data, device_type=None, device_id=None, df_key=None, col=None):
 
 def get(data, device_type=None, device_id=None, df_key=None, col=None):
     """
-    Analysis-friendly "one function" accessor for your nested structure.
-
-    Expected hierarchy (based on your display output):
-        data[device_type][device_id]["data"][df_key]["df"]  -> pandas DataFrame
-        data[device_type][device_id]["data"][df_key]["df"][col] -> pandas Series/column
-
-    Routing (controlled by which optional args you pass):
-        get(data)
-        -> returns the whole input unchanged
-
-        get(data, device_type)
-        -> returns all devices of that type: data[device_type]
-        (i.e., {device_id: device_content})
-
-        get(data, device_type, device_id)
-        -> returns a flattened dict of that device's dfs: {df_key: df}
-        (handy for iterating in stats/analysis)
-
-        get(data, device_type, device_id, df_key)
-        -> returns the specific DataFrame table
-
-        get(data, device_type, device_id, df_key, col)
-        -> returns a single Series/column from that table
+    Supports:
+        - df_key: str or list/tuple/set
+        - col: None, str, or list/tuple/set
+        - device_id: str or list/tuple/set
     """
-
-    # If you don't specify a device_type, don't do navigation—just return the data as-is.
+    # a. if no given device_type
     if device_type is None:
+        if isinstance(data, dict) and "data" in data:
+            return {
+                k: v["df"]
+                for k, v in data["data"].items()
+                if isinstance(v, dict) and "df" in v
+            }
         return data
 
-    # If device_type is given but no device_id, return all device contents of that type.
-    # Example: data["Atmotube"] -> {device_id: device_content}
+    # b. if no given device_id, return all devices of the given type
     if device_id is None:
         return data[device_type]
 
-    # Now we have a single device_id, so we can grab its "device_content" object.
-    # Example: content = data["Atmotube"][some_device_id]
+    # helper: apply col selection to a DataFrame
+    def select_cols(df):
+        if col is None:
+            return df
+        if isinstance(col, (list, tuple, set)):
+            return df[list(col)]
+        return df[col]
+
+    # NEW: multiple device_ids
+    if isinstance(device_id, (list, tuple, set)):
+        out = {}
+        for did in device_id:
+            out[did] = get(data, device_type, did, df_key, col)
+        return out
+
+    # c. single device_id
     content = data[device_type][device_id]
 
-    # If df_key is not provided, flatten all dfs for this device into {df_key: df}.
-    # Example: {"pm": <DataFrame>, "weather": <DataFrame>, ...}
+    # c1. if df_key is None: flatten all dfs for this device
     if df_key is None:
-        return {
-            k: v["df"]
-            for k, v in content["data"].items()
-            # Defensive check: make sure each entry looks like {"df": <DataFrame>}
-            if isinstance(v, dict) and "df" in v
-        }
+        return {k: select_cols(v["df"])
+                for k, v in content["data"].items()
+                if isinstance(v, dict) and "df" in v}
 
-    # If df_key is provided, get the specific DataFrame for that table name.
+    # c2. df_key is a collection: return {df_key: df(or selected cols)}
+    if isinstance(df_key, (list, tuple, set)):
+        out = {}
+        for k in df_key:
+            df = content["data"][k]["df"]
+            out[k] = select_cols(df)
+        return out
+
+    # c3. df_key is a single key
     df = content["data"][df_key]["df"]
+    return select_cols(df)
 
-    # If no column is requested, return the whole DataFrame.
-    if col is None:
-        return df
-
-    # Otherwise return a single column/Series from the DataFrame.
-    return df[col]
+# Example: atmotube_device_pm2_5 = get(data, "Atmotube", "C7A595F09965_01-May-2026_12-Jun-2026", ["pm"], ["pm2_5_ugm3_atm", "pm10_ugm3_atm"]) # returns the two specified variables from the pm df
 
 
-# Examples:   get(data)                                             # all loaded data
-#             get(data, "Atmotube")                                 # all Atmotube device_ids (device_content dict)
-#             get(data, "Atmotube", device_id)                      # one device_content (with "data" dfs)
-#             get(data, "Atmotube", device_id, "pm")                # only pm DataFrame
-#             get(data, "Atmotube", device_id, "pm", "pm2_5_ugm3_atm")  # only pm column/Series
-#             get(data, "Atmotube", device_id, None)               # flattened {df_key: df} (if you ever support this explicitly)
+def use(dfs, *df_names, how: str = "outer") -> pd.DataFrame:
+    """
+    Merge a dict of per-category DataFrames into one wide DataFrame, joined
+    on "datetime".
 
+    Accepts either a flat {df_key: df} dict or a device content dict
+    directly (anything with a "data" key) — normalizes via get() internally,
+    so you don't need to flatten first.
 
+    By default merges every table. Pass specific table names as positional
+    args to merge only those instead.
 
-# def merge_data(dfs: dict[str, pd.DataFrame], *df_names, how: str = "outer") -> pd.DataFrame:
-#     """
-#     Merge a dict of per-category DataFrames into one wide DataFrame, joined
-#     on "datetime".
+    Args:
+        dfs: flat {df_key: df} dict, or a device dict (get() flattens it).
+        *df_names: optional table names to merge (e.g. "pm", "weather").
+                If omitted, every table is merged.
+        how: join type passed to pd.merge (default "outer" — preserves
+            every timestamp present in ANY table, not just whichever
+            table happens to be first).
+    """
+    dfs = get(dfs)  # pass-through if already flat; flattens if it's a device dict
 
-#     By default merges every table in `dfs`. Pass specific table names as
-#     positional args to merge only those instead.
+    if df_names:
+        invalid = [n for n in df_names if n not in dfs]
+        if invalid:
+            print(f"df(s) not found: {invalid}. Available: {list(dfs.keys())}")
+            return None
+        dfs = [dfs[n] for n in df_names]
+    else:
+        dfs = list(dfs.values())
 
-#     Args:
-#         dfs: flat dict of {df_key: df} — typically extract_dfs(device).
-#         *df_names: optional table names to merge (e.g. "pm", "weather").
-#                     If omitted, every table in dfs is merged.
-#         how: join type passed to pd.merge (default "outer" — preserves
-#                 every timestamp present in ANY table, rather than only
-#                 timestamps present in whichever table happens to be first).
-#     """
-#     if df_names:
-#         invalid = [n for n in df_names if n not in dfs]
-#         if invalid:
-#             print(f"df(s) not found: {invalid}. Available: {list(dfs.keys())}")
-#             return None
-#         dfs = [dfs[n] for n in df_names]
-#     else:
-#         dfs = list(dfs.values())
+    if not dfs:
+        return pd.DataFrame()
 
-#     if not dfs:
-#         return pd.DataFrame()
+    return reduce(
+        lambda left, right: pd.merge(left, right, on="datetime", how=how),
+        dfs
+    )
 
-#     return reduce(
-#         lambda left, right: pd.merge(left, right, on="datetime", how=how),
-#         dfs
-#     )
-
-# # Example: merge_data(extract_dfs(device))                          # merge everything
-# #          merge_data(extract_dfs(device), "pm", "weather")         # just pm + weather, joined on datetime
-
-
+# use(device)                              # merge everything; device dict normalized via get()
+# use(get(data, "Atmotube", device_id))     # equivalent, pre-flattened
+# use(device, "pm", "weather")              # just pm + weather, joined on datetime

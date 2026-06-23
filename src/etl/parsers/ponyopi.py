@@ -168,5 +168,3 @@ def parse(df: pd.DataFrame) -> dict:
 # Example: from src.parsers.ponyopi import parse
 #          dfs = parse(df)
 #          dfs["pm"]    # PM sub-dataframe
-#          dfs["sys"]   # system + power sub-dataframe
-#          dfs["all"]   # fully merged dataframe

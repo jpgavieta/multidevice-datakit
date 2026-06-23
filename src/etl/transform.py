@@ -1,7 +1,5 @@
 import pandas as pd
 
-from src.utils import merge_data
-
 from src.etl.parsers import atmotube
 from src.etl.parsers import ponyopi
 
@@ -40,7 +38,8 @@ def transform_device_data(
     Returns
     -------
     dict
-        { device_type: { device_id: { "gis": df, "data": { table_name: {...} } } } }
+        { device_type: { device_id: { "data": { df_name: { "df": <DataFrame>: {...} } } } } 
+        Example: {'Atmotube': {'C3CBE16AE294_01-May-2026_12-Jun-2026': {'data': {'gis': {'df': <DataFrame> } } } } } 
     """
     results: dict[str, dict[str, dict]] = {}
 
@@ -57,11 +56,11 @@ def transform_device_data(
                 # Apply the parser (Transform Step) — one device_id at a time
                 parsed_result = parser_module.parse(raw_df)
 
-                results[device_type][device_id] = {
+                results[device_type][device_id] = { 
                     "data": {
-                        key: {
+                        key: { # this turns it 
                             "df": df,
-                            "cols": [col for col in df.columns if col != "datetime"]
+                            # "cols": [col for col in df.columns if col != "datetime"] # i dont think this is being used anywhere else? seems unnecessary shit to me
                         }
                         for key, df in parsed_result.items()
                     }

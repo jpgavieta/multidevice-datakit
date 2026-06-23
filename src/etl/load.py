@@ -23,7 +23,7 @@ def load_data(mount_path: str) -> dict:
     Returns
     -------
     dict
-        { device_type: { device_id: { "gis": df, "data": { df_key: {"df":, "cols":} } } } }
+        { device_type: { device_id: { "gis": df, "data": { table_name: {"df":, "cols":} } } } }
     """
     raw_data = extract_raw_data(mount_path)
     return transform_device_data(raw_data)
