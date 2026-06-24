@@ -10,7 +10,7 @@ from src.etl.transform import transform_device_data
 
 # ============================================================================================================
 
-def load_data(mount_path: str) -> dict:
+def load(mount_path: str) -> dict:
     """
     Run the full extract -> transform pipeline for all device_type folders
     under mount_path.
@@ -28,14 +28,14 @@ def load_data(mount_path: str) -> dict:
     raw_data = extract_raw_data(mount_path)
     return transform_device_data(raw_data)
 
-# Example: data = load_pipeline("/home/yul/mnt/proton-data")
+# Example: data = load("/home/yul/mnt/proton-data")
 #          data["Atmotube"]["C3CBE16AE294_01-May-2026_12-Jun-2026"]["data"]["pm"]["df"]    # PM DataFrame for that device_id
 #          data["Atmotube"]["C3CBE16AE294_01-May-2026_12-Jun-2026"]["gis"]                 # GIS DataFrame for that device_id
 #          list(data["Atmotube"].keys())                                                   # all device_ids loaded for Atmotube
 
 if __name__ == "__main__":
     MOUNT_PATH = "/home/yul/mnt/proton-data"
-    data = load_data(MOUNT_PATH)
+    data = load(MOUNT_PATH)
     if data:
         print(f"\nLoaded {len(data)} device_type stream(s).")
         for device_type, devices in data.items():

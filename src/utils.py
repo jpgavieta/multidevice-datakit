@@ -314,13 +314,15 @@ def get_cols(df, include_keywords, exclude_keywords=None):
     
     return df[cols]   
 
-## Example: get_cols(df, ["pm" "temp"], ["ppm"])
+# Example: get_cols(df, ["pm" "temp"], ["ppm"])
 
 def rename_cols(df, *args, silent=False):
-    """Find columns with include_keywords (case-insensitive).
+    """
+    Find columns with include_keywords (case-insensitive).
     Sequentially run through the list of (["keywords", "of_old_name"], "new_name") pairs.
     Rename each pair one at a time. Requires ALL keywords to match.
-    If no match found for a pair, skip and print a warning unless silent=True."""
+    If no match found for a pair, skip and print a warning unless silent=True.
+    """
 
     df = df.copy()
     mapping = {}
@@ -382,139 +384,311 @@ def skim(data, device_type=None, device_id=None, df_key=None, col=None):
     if device_type is None:
         return skim_loaded_data(data)
 
-    # b. filter to one device_type (AKA all device_ids)
+    # one or more device_types
+    if isinstance(device_type, (list, tuple, set)):
+        for dt in device_type:
+            if dt not in data:
+                print(f"⚠️ {dt} is not available")
+                continue
+            skim(data, dt, device_id, df_key, col)
+        return None
+
+    if device_type not in data:
+        print(f"⚠️ {device_type} is not available")
+        return None
+
+    # b. filter to one device_type (all its device_ids)
     if device_id is None:
         return skim_loaded_data({device_type: data[device_type]})
+
+    # one or more device_ids
+    if isinstance(device_id, (list, tuple, set)):
+        for did in device_id:
+            if did not in data[device_type]:
+                print(f"⚠️ {did} is not available")
+                continue
+            skim(data, device_type, did, df_key, col)
+        return None
+
+    if device_id not in data[device_type]:
+        print(f"⚠️ {device_id} is not available")
+        return None
 
     # now we have one specific device_id
     content = data[device_type][device_id]
 
-    # c. filter to one specific device_id (and all its dfs)
+    # c. filter to one specific device_id (all its dfs)
     if df_key is None:
         return skim_loaded_data({device_type: {device_id: content}})
 
-    # d. filter to one dfs (df_key) -> per-column: name (len, dtype)
+    # one or more df_keys
+    if isinstance(df_key, (list, tuple, set)):
+        for dk in df_key:
+            if dk not in content["data"]:
+                print(f"⚠️ {dk} is not available")
+                continue
+            skim(data, device_type, device_id, dk, col)
+        return None
+
+    if df_key not in content["data"]:
+        print(f"⚠️ {df_key} is not available")
+        return None
+
+    df = content["data"][df_key]["df"]
+
+    # d. filter to one df (df_key) -> per-column: name (len, dtype)
     if col is None:
-        df = content["data"][df_key]["df"]
         print(f"{device_type}/{device_id}/{df_key}")
-        print(f"  df.shape: {df.shape}")  # optional quick sanity line
+        print(f"  df.shape: {df.shape}")
+        if "datetime" in df.columns:
+            print(f"  range   : {df['datetime'].min()} → {df['datetime'].max()}")
         for c in df.columns:
             s = df[c]
-            # (len, dtype) in a similar style to device summaries
             print(f"  {c:25s}: ({len(s)}, {s.dtype})")
-        return df
+        return None
 
-    # e. filter to one variable-only: one column/Series (same path, minimal metadata)
-    s = content["data"][df_key]["df"][col]
+    # one or more cols
+    if isinstance(col, (list, tuple, set)):
+        for c in col:
+            if c not in df.columns:
+                print(f"⚠️ {c} is not available")
+                continue
+            skim(data, device_type, device_id, df_key, c)
+        return None
+
+    if col not in df.columns:
+        print(f"⚠️ {col} is not available")
+        return None
+
+    # e. filter to one variable-only: one column/Series
+    s = df[col]
     print(f"{device_type}/{device_id}/{df_key}/{col}")
     print(f"  ({len(s)}, {s.dtype})")
+    if "datetime" in df.columns and col != "datetime":
+        valid_dt = df.loc[s.notna(), "datetime"]
+        if not valid_dt.empty:
+            print(f"  range   : {valid_dt.min()} → {valid_dt.max()}  (where '{col}' is present)")
+        else:
+            print(f"  range   : no non-null values for '{col}'")
     return None
 
-# Examples:   skim(data)                                             # all loaded data
-#             skim(data, "Atmotube")                                 # all Atmotube device_ids
-#             skim(data, "Atmotube", device_id)                      # one device_id
-#             skim(data, "Atmotube", device_id, "pm")                # only pm df
-#             skim(data, "Atmotube", device_id, "pm", "pm_2_5_ugm")  # only pm 2.5 column
+# Examples:
+#   skim(data)                                                                   # all loaded data
+#   skim(data, "Atmotube")                                                       # all Atmotube device_ids
+#   skim(data, ["Atmotube", "Ponyopi"])                                          # all device_ids, both device types
+#   skim(data, "Atmotube", device_id)                                            # one device_id, all its dfs
+#   skim(data, "Atmotube", [device_a, device_b])                                 # two device_ids, all dfs each
+#   skim(data, "Atmotube", device_id, "pm")                                      # one df
+#   skim(data, "Atmotube", device_id, ["pm", "weather"])                         # two dfs, one device  <- what you typed
+#   skim(data, "Atmotube", [device_a, device_b], "pm")                           # same df, two devices
+#   skim(data, "Atmotube", device_id, "pm", "pm2_5_ugm3_atm")                    # one column
+#   skim(data, "Atmotube", device_id, "pm", ["pm2_5_ugm3_atm", "pm10_ugm3_atm"]) # two columns
+
+
+def unnest(content):
+    """
+    Unwrap a device's content dict into a flat {df_key: df} dict — the
+    raw material merge() expects.
+
+    Accepts:
+    -   a device content dict (has a "data" key): unwraps content["data"],
+        pulling just the "df" out of each {"df": df} entry.
+    -   an already-flat {df_key: df} dict: returned unchanged, so calling
+        unnest() on something already extracted is always safe.
+    """
+    if isinstance(content, dict) and "data" in content:
+        return {
+            k: v["df"]
+            for k, v in content["data"].items()
+            if isinstance(v, dict) and "df" in v
+        }
+    return content
+
+# Example:
+#   unnest(get(data, "device_type", "device_id"))      
+#   OR
+#   device = get(data, "device_type", "device_id")      
+#   unnest(device)                                    # equivalent — get() already returns this same shape
+
+
+def merge(*dfs_dicts, df_names=None, how="outer", **named_dicts):
+    """
+    Merge function for the unnest() output (dict of {table_name: df}) into one
+    wide DataFrame joined on "datetime".
+
+    Supports:
+    -   One positional dict (unnamed device): no column suffixing
+    -   Multiple named devices via keyword args (device_name=dict): suffix all
+        non-"datetime" columns with _<device_name>
+    -   df_names: str or list/tuple/set to select which tables to merge
+    -   how: join type for pd.merge (default "outer")
+    """
+    if dfs_dicts and named_dicts:
+        raise ValueError("Pass either one positional dict, or named devices via keyword args — not both.")
+
+    if dfs_dicts:
+        if len(dfs_dicts) != 1:
+            raise ValueError(
+                "Multiple dicts given without names — use keyword args instead "
+                "(e.g. merge(device_a=dict_a, device_b=dict_b)) so each has a "
+                "name to suffix columns with."
+            )
+        devices = {None: dfs_dicts[0]}
+    else:
+        devices = named_dicts
+
+    suffix_needed = len(devices) > 1
+    all_tables = []
+
+    for device_name, dfs in devices.items():
+        if df_names:
+            invalid = [n for n in df_names if n not in dfs]
+            if invalid:
+                label = f"'{device_name}'" if device_name else "the dict"
+                print(f"df(s) not found in {label}: {invalid}. Available: {list(dfs.keys())}")
+                return None
+            tables = [dfs[n] for n in df_names]
+        else:
+            tables = list(dfs.values())
+
+        if suffix_needed:
+            tables = [
+                t.rename(columns={c: f"{c}_{device_name}" for c in t.columns if c != "datetime"})
+                for t in tables
+            ]
+
+        all_tables.extend(tables)
+
+    if not all_tables:
+        return pd.DataFrame()
+
+    return reduce(
+        lambda left, right: pd.merge(left, right, on="datetime", how=how),
+        all_tables
+    )
+
+# Example:
+#   merge(unnest(device))                                                          # one device, all tables, no suffix
+#   merge(unnest(device), df_names=["pm"])                                         # one device, just pm
+#   merge(device_a=unnest(content_a), device_b=unnest(content_b))                  # two devices, all tables, suffixed
+#   merge(device_a=unnest(content_a), device_b=unnest(content_b), df_names=["pm"]) # two devices, just pm, suffixed
+
 
 def get(data, device_type=None, device_id=None, df_key=None, col=None):
     """
+    The single navigation function for the nested pipeline structure. 
+
+    Always returns a dict or a Series — never a bare DataFrame at the top
+    level. 
+    
+    Unwrapping a table's {"df": df} entry into an actual DataFrame
+    happens exclusively inside unnest() — get() never reaches into ["df"]
+    itself.
+
     Supports:
+        - device_type: str or list/tuple/set
+        - device_id: str or list/tuple/set
         - df_key: str or list/tuple/set
         - col: None, str, or list/tuple/set
-        - device_id: str or list/tuple/set
     """
     # a. if no given device_type
     if device_type is None:
-        if isinstance(data, dict) and "data" in data:
-            return {
-                k: v["df"]
-                for k, v in data["data"].items()
-                if isinstance(v, dict) and "df" in v
-            }
-        return data
+        return unnest(data)
+
+    # one or more device_types
+    if isinstance(device_type, (list, tuple, set)):
+        out = {}
+        for dt in device_type:
+            if dt not in data:
+                print(f"⚠️ {dt} is not available")
+                continue
+            out[dt] = get(data, dt, device_id, df_key, col)
+        return out
+
+    if device_type not in data:
+        print(f"⚠️ {device_type} is not available")
+        return None
 
     # b. if no given device_id, return all devices of the given type
     if device_id is None:
         return data[device_type]
 
-    # helper: apply col selection to a DataFrame
+    # helper: select column(s) from a DataFrame.
+    #   col is None  -> df unchanged (still a DataFrame, but only ever as
+    #                   a dict VALUE — never returned bare at top level)
+    #   col is a str -> a Series
+    #   col is a list/tuple/set -> dict {col_name: Series}, never a
+    #                   sub-DataFrame
     def select_cols(df):
         if col is None:
             return df
         if isinstance(col, (list, tuple, set)):
-            return df[list(col)]
+            out = {}
+            for c in col:
+                if c not in df.columns:
+                    print(f"⚠️ {c} is not available")
+                    continue
+                out[c] = df[c]
+            return out
+        if col not in df.columns:
+            print(f"⚠️ {col} is not available")
+            return None
         return df[col]
 
-    # allows for multiple device_ids
+    # one or more device_ids
     if isinstance(device_id, (list, tuple, set)):
         out = {}
         for did in device_id:
+            if did not in data[device_type]:
+                print(f"⚠️ {did} is not available")
+                continue
             out[did] = get(data, device_type, did, df_key, col)
         return out
 
-    # c. single device_id
+    if device_id not in data[device_type]:
+        print(f"⚠️ {device_id} is not available")
+        return None
+
+    # c. single device_id — unwrap once via unnest(), use it everywhere below
     content = data[device_type][device_id]
+    dfs = unnest(content)  # {table_name: df, ...} — the ONLY unwrap point
 
-    # c1. if df_key is None: flatten all dfs for this device
+    # c1. if df_key is None: every table for this device
     if df_key is None:
-        return {k: select_cols(v["df"])
-                for k, v in content["data"].items()
-                if isinstance(v, dict) and "df" in v}
+        return {k: select_cols(df) for k, df in dfs.items()}
 
-    # c2. df_key is a collection: return {df_key: df(or selected cols)}
+    # c2. df_key is a collection: just those tables, always as a dict
     if isinstance(df_key, (list, tuple, set)):
         out = {}
         for k in df_key:
-            df = content["data"][k]["df"]
-            out[k] = select_cols(df)
+            if k not in dfs:
+                print(f"⚠️ {k} is not available")
+                continue
+            out[k] = select_cols(dfs[k])
         return out
 
-    # c3. df_key is a single key
-    df = content["data"][df_key]["df"]
-    return select_cols(df)
+    if df_key not in dfs:
+        print(f"⚠️ {df_key} is not available")
+        return None
 
-# Example: atmotube_device_pm2_5 = get(data, "Atmotube", "C7A595F09965_01-May-2026_12-Jun-2026", ["pm"], ["pm2_5_ugm3_atm", "pm10_ugm3_atm"]) # returns the two specified variables from the pm df
+    # c3. df_key is a single key — still wrapped in a dict, since a bare
+    # DataFrame is never the top-level return. col=None -> {df_key: df};
+    # col=str -> a Series (the one non-dict result, and that's allowed);
+    # col=list -> dict of Series, via select_cols.
+    result = select_cols(dfs[df_key])
+    if col is None:
+        return {df_key: result}
+    return result
+
+# Examples:
+#   get(data)                                                                   # entire loaded dataset, unchanged
+#   get(data, "Atmotube")                                                       # all Atmotube device_ids, NOT flattened
+#   get(data, "Atmotube", device_id)                                            # one device, flattened to {df_key: df}
+#   get(data, "Atmotube", [device_a, device_b])                                 # two devices, each flattened to {df_key: df}
+#   get(data, "Atmotube", device_id, "pm")                                      # one df
+#   get(data, "Atmotube", device_id, ["pm", "weather"])                         # two dfs, one device
+#   get(data, "Atmotube", [device_a, device_b], "pm")                           # same df, two devices, NOT merged
+#   get(data, "Atmotube", device_id, "pm", "pm2_5_ugm3_atm")                    # one column
+#   get(data, "Atmotube", device_id, "pm", ["pm2_5_ugm3_atm", "pm10_ugm3_atm"]) # two columns
 
 
-def use(dfs, *df_names, how: str = "outer") -> pd.DataFrame:
-    """
-    Merge a dict of per-category DataFrames into one wide DataFrame, joined
-    on "datetime".
-
-    Accepts either a flat {df_key: df} dict or a device content dict
-    directly (anything with a "data" key) — normalizes via get() internally,
-    so you don't need to flatten first.
-
-    By default merges every table. Pass specific table names as positional
-    args to merge only those instead.
-
-    Args:
-        dfs: flat {df_key: df} dict, or a device dict (get() flattens it).
-        *df_names: optional table names to merge (e.g. "pm", "weather").
-                If omitted, every table is merged.
-        how: join type passed to pd.merge (default "outer" — preserves
-            every timestamp present in ANY table, not just whichever
-            table happens to be first).
-    """
-    dfs = get(dfs)  # pass-through if already flat; flattens if it's a device dict
-
-    if df_names:
-        invalid = [n for n in df_names if n not in dfs]
-        if invalid:
-            print(f"df(s) not found: {invalid}. Available: {list(dfs.keys())}")
-            return None
-        dfs = [dfs[n] for n in df_names]
-    else:
-        dfs = list(dfs.values())
-
-    if not dfs:
-        return pd.DataFrame()
-
-    return reduce(
-        lambda left, right: pd.merge(left, right, on="datetime", how=how),
-        dfs
-    )
-
-# use(device)                              # merge everything; device dict normalized via get()
-# use(get(data, "Atmotube", device_id))     # equivalent, pre-flattened
-# use(device, "pm", "weather")              # just pm + weather, joined on datetime

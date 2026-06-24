@@ -26,14 +26,17 @@ def _resolve_targets(dfs, df_names, skip):
 
 # ============================================================================================================
 # Main
-
 def report_loss(device, *df_names):
     """
     Reports data quality metrics: row counts, missing values, and coverage %.
     Includes a visual bar for coverage.
     """
-    skip = {"all"}  # merged table — NaNs here come from the join, not real sensor dropout
     dfs = get(device)
+    if dfs is None:
+        print("⚠️ No data to report on.")
+        return
+
+    skip = {"all"}  # merged table — NaNs here come from the join, not real sensor dropout
     targets = _resolve_targets(dfs, df_names, skip)
     if targets is None:
         return
@@ -56,10 +59,6 @@ def report_loss(device, *df_names):
             print(f"{name:<10} {col:<25} {total_rows:>8} {missing:>8} {coverage:>8.1f}%  {bar}")
         print()
 
-# report_loss(device)              # all tables
-# report_loss(device, "pm")        # just pm
-# report_loss(device, "pm", "gas") # pm and gas
-
 
 def plot_ranges(device, *df_names, window="10min", center="mean", figsize=(10, 4)):
     """
@@ -67,8 +66,12 @@ def plot_ranges(device, *df_names, window="10min", center="mean", figsize=(10, 4
     a shaded band showing the rolling min/max envelope over time, with a
     rolling mean/median line drawn through it.
     """
-    skip = {"all"}
     dfs = get(device)
+    if dfs is None:
+        print("⚠️ No data to plot.")
+        return
+
+    skip = {"all"}
     targets = _resolve_targets(dfs, df_names, skip)
     if targets is None:
         return
