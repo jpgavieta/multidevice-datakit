@@ -6,7 +6,7 @@ import pandas as pd
 from functools import reduce
 from tzfpy import get_tz
 
-from typing import Any, Dict, Optional, Literal
+from typing import Any, Dict, Optional, Literal, cast
 
 # ============================================================================================================
 # JSON-blob-in-CSV Data
@@ -479,22 +479,22 @@ def skim(data, device_type=None, device_id=None, df_key=None, col=None):
 #   skim(data, "Atmotube", device_id)                                            # one device_id, all its dfs
 #   skim(data, "Atmotube", [device_a, device_b])                                 # two device_ids, all dfs each
 #   skim(data, "Atmotube", device_id, "pm")                                      # one df
-#   skim(data, "Atmotube", device_id, ["pm", "weather"])                         # two dfs, one device  <- what you typed
+#   skim(data, "Atmotube", device_id, ["pm", "weather"])                         # two dfs, one device  
 #   skim(data, "Atmotube", [device_a, device_b], "pm")                           # same df, two devices
 #   skim(data, "Atmotube", device_id, "pm", "pm2_5_ugm3_atm")                    # one column
 #   skim(data, "Atmotube", device_id, "pm", ["pm2_5_ugm3_atm", "pm10_ugm3_atm"]) # two columns
 
 
-def unnest(content: Any) -> Dict[str, pd.DataFrame]:
+def unwrap(content: Any) -> Dict[str, pd.DataFrame]:
     """
-    Unwrap a device's content dict into a flat {df_key: df} dict — the
+    Unwraps ONE device's content (a nested dict) into a flat dict of {df_key: df} — the
     raw material merge() expects.
 
     Accepts:
     -   a device content dict (has a "data" key): unwraps content["data"],
         pulling just the "df" out of each {"df": df} entry.
     -   an already-flat {df_key: df} dict: returned unchanged, so calling
-        unnest() on something already extracted is always safe.
+        unwrap() on something already extracted is always safe.
     """
     if isinstance(content, dict) and "data" in content:
         return {
@@ -505,10 +505,10 @@ def unnest(content: Any) -> Dict[str, pd.DataFrame]:
     return content
 
 # Example:
-#   unnest(get(data, "device_type", "device_id"))      
+#   unwrap(get(data, "device_type", "device_id"))      
 #   OR
 #   device = get(data, "device_type", "device_id")      
-#   unnest(device)                                    # equivalent — get() already returns this same shape
+#   unwrap(device)                                    # equivalent — get() already returns this same shape
 
 
 def merge(
@@ -520,17 +520,20 @@ def merge(
     """
     Merge function for the unnest() output (dict of {table_name: df}) into one
     wide DataFrame joined on "datetime".
-
     Supports:
     -   One positional dict (unnamed device): no column suffixing
     -   Multiple named devices via keyword args (device_name=dict): suffix all
         non-"datetime" columns with _<device_name>
     -   df_names: str or list/tuple/set to select which tables to merge
     -   how: join type for pd.merge (default "outer")
+
+    Raises:
+        ValueError: if both positional and named dicts are given, if
+            multiple unnamed positional dicts are given, or if a requested
+            df_name isn't found in a device's tables.
     """
     if dfs_dicts and named_dicts:
         raise ValueError("Pass either one positional dict, or named devices via keyword args — not both.")
-
     if dfs_dicts:
         if len(dfs_dicts) != 1:
             raise ValueError(
@@ -544,24 +547,22 @@ def merge(
 
     suffix_needed = len(devices) > 1
     all_tables = []
-
     for device_name, dfs in devices.items():
         if df_names:
             invalid = [n for n in df_names if n not in dfs]
             if invalid:
                 label = f"'{device_name}'" if device_name else "the dict"
-                print(f"df(s) not found in {label}: {invalid}. Available: {list(dfs.keys())}")
-                return None
+                raise ValueError(
+                    f"df(s) not found in {label}: {invalid}. Available: {list(dfs.keys())}"
+                )
             tables = [dfs[n] for n in df_names]
         else:
             tables = list(dfs.values())
-
         if suffix_needed:
             tables = [
                 t.rename(columns={c: f"{c}_{device_name}" for c in t.columns if c != "datetime"})
                 for t in tables
             ]
-
         all_tables.extend(tables)
 
     if not all_tables:
@@ -573,10 +574,10 @@ def merge(
     )
 
 # Example:
-#   merge(unnest(device))                                                          # one device, all tables, no suffix
-#   merge(unnest(device), df_names=["pm"])                                         # one device, just pm
-#   merge(device_a=unnest(content_a), device_b=unnest(content_b))                  # two devices, all tables, suffixed
-#   merge(device_a=unnest(content_a), device_b=unnest(content_b), df_names=["pm"]) # two devices, just pm, suffixed
+#   merge(unwrap(device))                                                          # one device, all tables, no suffix
+#   merge(unwrap(device), df_names=["pm"])                                         # one device, just pm
+#   merge(device_a=unwrap(content_a), device_b=unwrap(content_b))                  # two devices, all tables, suffixed
+#   merge(device_a=unwrap(content_a), device_b=unwrap(content_b), df_names=["pm"]) # two devices, just pm, suffixed
 
 
 def get(data, device_type=None, device_id=None, df_key=None, col=None):
@@ -586,7 +587,7 @@ def get(data, device_type=None, device_id=None, df_key=None, col=None):
     level.
 
     Unwrapping a table's {"df": df} entry into an actual DataFrame
-    happens exclusively inside unnest() — get() never reaches into ["df"]
+    happens exclusively inside unwrap() — get() never reaches into ["df"]
     itself.
 
     Supports:
@@ -594,10 +595,17 @@ def get(data, device_type=None, device_id=None, df_key=None, col=None):
         - device_id: str or list/tuple/set
         - df_key: str or list/tuple/set
         - col: None, str, or list/tuple/set
+
+    Raises:
+        KeyError: if a SINGLE device_type/device_id/df_key/col is given
+            and it isn't found.
+    Note:
+        When given as part of a list/tuple/set, a missing item is instead
+        skipped with a warning, so one bad ID doesn't abort a batch lookup.
     """
     # a. if no given device_type
     if device_type is None:
-        return unnest(data)
+        return unwrap(data)
 
     # one or more device_types
     if isinstance(device_type, (list, tuple, set)):
@@ -610,8 +618,7 @@ def get(data, device_type=None, device_id=None, df_key=None, col=None):
         return out
 
     if device_type not in data:
-        print(f"⚠️ device_type '{device_type}' is not available")
-        return None
+        raise KeyError(f"device_type '{device_type}' is not available")
 
     # b. if no given device_id, return all devices of the given type
     if device_id is None:
@@ -628,25 +635,29 @@ def get(data, device_type=None, device_id=None, df_key=None, col=None):
             return df
 
         if isinstance(col, (list, tuple, set)):
-            out = {}
-            for c in col:
-                if c not in df.columns:
-                    print(
-                        f"⚠️ col '{c}' is not available in df '{table_name}' "
-                        f"(device_type '{dtypename}', device_id '{did}')"
-                    )
-                    continue
-                out[c] = df[c]
-            return out
+            # Always keep datetime, even if the caller didn't ask for it —
+            # merge() needs it to join tables together.
+            cols_to_use = list(col)
+            if "datetime" in df.columns and "datetime" not in cols_to_use:
+                cols_to_use = ["datetime"] + cols_to_use
+
+            missing = [c for c in cols_to_use if c not in df.columns]
+            for c in missing:
+                print(
+                    f"⚠️ col '{c}' is not available in df '{table_name}' "
+                    f"(device_type '{dtypename}', device_id '{did}')"
+                )
+
+            valid_cols = [c for c in cols_to_use if c in df.columns]
+            return df[valid_cols]  # DataFrame, not a dict of Series
 
         if col not in df.columns:
-            print(
-                f"⚠️ col '{col}' is not available in df '{table_name}' "
+            raise KeyError(
+                f"col '{col}' is not available in df '{table_name}' "
                 f"(device_type '{dtypename}', device_id '{did}')"
             )
-            return None
 
-        return df[col]
+        return df[col]  # still a Series for a single column name — see note below
 
     # one or more device_ids
     if isinstance(device_id, (list, tuple, set)):
@@ -661,12 +672,13 @@ def get(data, device_type=None, device_id=None, df_key=None, col=None):
         return out
 
     if device_id not in data[device_type]:
-        print(f"⚠️ device_id '{device_id}' is not available in device_type '{device_type}'")
-        return None
+        raise KeyError(
+            f"device_id '{device_id}' is not available in device_type '{device_type}'"
+        )
 
-    # c. single device_id — unwrap once via unnest(), use it everywhere below
+    # c. single device_id — unwrap once via unwrap(), use it everywhere below
     content = data[device_type][device_id]
-    dfs = unnest(content)  # {table_name: df, ...} — the ONLY unwrap point
+    dfs = unwrap(content)  # {table_name: df, ...} — the ONLY unwrap point
 
     # c1. if df_key is None: every table for this device
     if df_key is None:
@@ -688,11 +700,10 @@ def get(data, device_type=None, device_id=None, df_key=None, col=None):
         return out
 
     if df_key not in dfs:
-        print(
-            f"⚠️ df '{df_key}' is not available in device_id '{device_id}' "
+        raise KeyError(
+            f"df '{df_key}' is not available in device_id '{device_id}' "
             f"(device_type '{device_type}')"
         )
-        return None
 
     # c3. df_key is a single key — still wrapped in a dict, since a bare
     # DataFrame is never the top-level return. col=None -> {df_key: df};
@@ -702,7 +713,6 @@ def get(data, device_type=None, device_id=None, df_key=None, col=None):
     if col is None:
         return {df_key: result}
     return result
-
 
 # Examples:
 #   get(data)                                                                   # entire loaded dataset, unchanged
@@ -716,3 +726,59 @@ def get(data, device_type=None, device_id=None, df_key=None, col=None):
 #   get(data, "Atmotube", device_id, "pm", ["pm2_5_ugm3_atm", "pm10_ugm3_atm"]) # two columns
 
 
+from IPython.display import HTML, display
+from IPython.utils.capture import capture_output
+import html as html_lib
+from typing import TypeVar, Callable
+
+T = TypeVar('T')
+
+# def scroll_output(func: Callable[..., T], *args, height: str = "400px", **kwargs) -> T:
+#     """Execute a function, capture its output in a scrollable box, and return the result."""
+#     old_stdout = sys.stdout
+#     sys.stdout = StringIO()
+    
+#     result = func(*args, **kwargs)
+    
+#     output = cast(StringIO, sys.stdout).getvalue()
+#     sys.stdout = old_stdout
+    
+#     style = f"max-height: {height}; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: #f5f5f5; color: #000; font-family: monospace; white-space: pre-wrap;"
+#     display(HTML(f'<div style="{style}">{output}</div>'))
+    
+#     return result
+
+T = TypeVar('T')
+
+def scroll_output(func: Callable[..., T], *args, height: str = "400px", **kwargs) -> T:
+    """
+    Execute a function, capture BOTH its print() output and any display()
+    calls (e.g. rich DataFrame tables), render everything inside ONE
+    scrollable HTML box, and return the function's result.
+    """
+    with capture_output() as captured:
+        result = func(*args, **kwargs)
+
+    parts = []
+
+    if captured.stdout:
+        parts.append(f"<pre>{html_lib.escape(captured.stdout)}</pre>")
+
+    for output in captured.outputs:
+        data = output.data
+        if "text/html" in data:
+            parts.append(data["text/html"])
+        elif "text/plain" in data:
+            parts.append(f"<pre>{html_lib.escape(data['text/plain'])}</pre>")
+
+    inner_html = "".join(parts)
+
+    style = (
+        f"max-height: {height}; overflow-y: auto; border: 1px solid #ccc; "
+        f"padding: 8px; background: #f5f5f5; color: #000; "
+        f"font-family: monospace; white-space: pre-wrap;"
+    )
+
+    display(HTML(f'<div style="{style}">{inner_html}</div>'))
+
+    return result
