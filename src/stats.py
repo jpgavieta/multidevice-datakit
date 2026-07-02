@@ -134,8 +134,8 @@ def report_loss(dfs, *df_names):
                 "df":       name,
                 "column":   col,
                 "rows":     total_rows,
-                "missing":  missing,
-                "coverage": coverage,
+                "missing (n)":  missing,
+                "coverage (%)": coverage,
             })
 
     return pd.DataFrame(rows)

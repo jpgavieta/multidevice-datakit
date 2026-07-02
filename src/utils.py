@@ -4,6 +4,7 @@ import json
 import pandas as pd 
 
 from functools import reduce
+from typeguard import value
 from tzfpy import get_tz
 
 from typing import Any, Dict, Optional, Literal, cast
@@ -357,137 +358,8 @@ def rename_cols(df, *args, silent=False):
 
 
 # ============================================================================================================
-# Helpers for multifiles per device_id in notebooks/
-
-_DEVICE_KEY_PATTERN = re.compile(r"^(?P<device_id>[A-Za-z0-9]+)_(?P<dates>.+)$")
-_DATE_FORMAT = "%d-%b-%Y"
-
-
-def _parse_device_key(device_key: str):
-    """
-    Parses a device_id key like 'C7A595F09965_01-May-2026_12-Jun-2026' or
-    'DB7A737B8CA0_30-Jun-2026' into (true_id, start_date, end_date).
-    If only one date is present, start_date == end_date.
-    Returns (None, None, None) if the key doesn't match the expected shape.
-    """
-    match = _DEVICE_KEY_PATTERN.match(device_key)
-    if not match:
-        return None, None, None
-
-    true_id = match.group("device_id")
-    date_parts = match.group("dates").split("_")
-
-    dates = []
-    for part in date_parts:
-        try:
-            dates.append(datetime.strptime(part.strip(), _DATE_FORMAT))
-        except ValueError:
-            continue  # skip anything that doesn't parse (e.g. malformed dates)
-
-    if not dates:
-        return true_id, None, None
-    if len(dates) == 1:
-        return true_id, dates[0], dates[0]
-    return true_id, dates[0], dates[-1]
-
-
-def list_device_ids(data: dict, device_type: str) -> list[str]:
-    """Returns the sorted, de-duplicated list of true device IDs (serials) for a device_type."""
-    ids = set()
-    for device_key in data.get(device_type, {}):
-        true_id, _, _ = _parse_device_key(device_key)
-        if true_id:
-            ids.add(true_id)
-    return sorted(ids)
-
-
-def find_files_for_id(data: dict, device_type: str, true_id: str) -> list[str]:
-    """Returns all device_id keys (filenames) belonging to one physical device, oldest to newest."""
-    matches = []
-    for device_key in data.get(device_type, {}):
-        parsed_id, start, _ = _parse_device_key(device_key)
-        if parsed_id == true_id:
-            matches.append((device_key, start))
-    matches.sort(key=lambda pair: (pair[1] is None, pair[1]))
-    return [key for key, _ in matches]
-
-
-def latest_file_for_id(data: dict, device_type: str, true_id: str) -> str | None:
-    """Returns the device_id key (filename) with the most recent end_date for a given true device ID."""
-    matches = []
-    for device_key in data.get(device_type, {}):
-        parsed_id, _, end = _parse_device_key(device_key)
-        if parsed_id == true_id and end is not None:
-            matches.append((device_key, end))
-    if not matches:
-        return None
-    matches.sort(key=lambda pair: pair[1])
-    return matches[-1][0]
-
-def merge_device_files(data: dict, device_type: str, true_id: str) -> dict[str, pd.DataFrame]:
-    """
-    Merges all file-chunks belonging to one physical device (true_id) into
-    a single {table_name: DataFrame} dict, ordered chronologically.
-
-    Overlapping rows that are IDENTICAL across files are deduplicated,
-    keeping the version from the OLDEST file. Overlapping rows with
-    DIFFERING values are both kept (resulting in duplicate datetimes) —
-    this surfaces the conflict rather than silently picking a winner.
-    """
-    keys = find_files_for_id(data, device_type, true_id)  # oldest -> newest
-    if not keys:
-        return {}
-
-    table_frames: dict[str, list[pd.DataFrame]] = {}
-    for key in keys:
-        content = get(data, device_type, key)  # {table_name: DataFrame}, already unwrapped
-        for table_name, df in content.items():
-            table_frames.setdefault(table_name, []).append(df)
-
-    merged_tables = {}
-    for table_name, dfs in table_frames.items():
-        combined = pd.concat(dfs, ignore_index=True)
-
-        if "datetime" in combined.columns:
-            # stable sort preserves original (chronological file) order for
-            # rows that share the same datetime — required for keep="first"
-            # to correctly favor the OLDEST file's version
-            combined = combined.sort_values("datetime", kind="stable")
-
-        before = len(combined)
-        combined = combined.drop_duplicates(keep="first").reset_index(drop=True)
-        dropped = before - len(combined)
-
-        # flag any datetimes that still repeat after dedup — these are
-        # genuine conflicts (same timestamp, different values)
-        if "datetime" in combined.columns:
-            conflict_count = combined["datetime"].duplicated().sum()
-            if conflict_count > 0:
-                print(
-                    f"⚠️ {true_id} / {table_name}: {conflict_count} datetime(s) "
-                    f"still duplicated after merge — same timestamp, differing values"
-                )
-
-        merged_tables[table_name] = combined
-
-    return merged_tables
-
-
-def consolidate_device_ids(data: dict, device_type: str) -> dict[str, dict[str, pd.DataFrame]]:
-    """
-    Merges all file-chunks for every physical device under a device_type
-    into one entry per true device ID.
-
-    Returns
-    -------
-    dict
-        { true_device_id: { table_name: merged_DataFrame } }
-    """
-    ids = list_device_ids(data, device_type)
-    return {true_id: merge_device_files(data, device_type, true_id) for true_id in ids}
-
-# ============================================================================================================
 # Helpers for Df Navigation in notebooks/
+
 
 def skim_loaded_data(data):
     """
@@ -865,45 +737,184 @@ from typing import TypeVar, Callable
 
 T = TypeVar('T')
 
-def scroll_output(func: Callable[..., T], *args, height: str = "400px", center: bool = True, **kwargs) -> T:
+def scroll_output(func: Callable[..., T], *args, height: str = "400px", plot_height: str = "800px", center: bool = True, **kwargs) -> T:
     """
     Execute a function, capture output, and render inside a scrollable box.
     Set center=True to horizontally center all content.
+    Automatically increases height if plots are detected.
     """
     with capture_output() as captured:
         result = func(*args, **kwargs)
 
     parts = []
+    has_plot = False
 
     if captured.stdout:
-        # If centering, wrap pre in a div or use text-align on parent
         parts.append(f"<pre>{html_lib.escape(captured.stdout)}</pre>")
 
     for output in captured.outputs:
         data = output.data
         if "text/html" in data:
             parts.append(data["text/html"])
+            # Detect interactive plots (Plotly, Altair, etc. use HTML)
+            if any(tag in data["text/html"].lower() for tag in ["plotly", "vega", "bokeh", "script"]):
+                has_plot = True
         elif "image/png" in data:
             b64 = data["image/png"]
-            # Images are inline by default, text-align on parent works
             parts.append(f'<img src="data:image/png;base64,{b64}" style="max-width:100%;">')
+            has_plot = True  # Matplotlib, seaborn, etc.
         elif "text/plain" in data:
             parts.append(f"<pre>{html_lib.escape(data['text/plain'])}</pre>")
 
     inner_html = "".join(parts)
 
+    # Use appropriate height based on plot detection
+    final_height = plot_height if has_plot else height
+
     # Base styles
     base_style = (
-        f"max-height: {height}; overflow-y: auto; border: 1px solid #ccc; "
+        f"max-height: {final_height}; overflow-y: auto; border: 1px solid #ccc; "
         f"padding: 8px; background: #f5f5f5; color: #000; "
         f"font-family: monospace; white-space: normal;"
     )
     
     # Add centering styles if requested
     if center:
-        # Flexbox is robust for centering block elements like tables/divs
         base_style += " display: flex; flex-direction: column; align-items: center; text-align: center;"
 
     display(HTML(f'<div style="{base_style}">{inner_html}</div>'))
 
-    return result   
+    return result
+
+# ============================================================================================================
+# Helpers for multifiles per device_id in notebooks/
+
+## WARNING: File extraction helpers (legacy method)
+## TODO: Remove when migrated to API-based extraction
+
+_DEVICE_KEY_PATTERN = re.compile(r"^(?P<device_id>[A-Za-z0-9]+)_(?P<dates>.+)$")
+_DATE_FORMAT = "%d-%b-%Y"
+
+
+def _parse_device_key(device_key: str):
+    """
+    Parses a device_id key like 'C7A595F09965_01-May-2026_12-Jun-2026' or
+    'DB7A737B8CA0_30-Jun-2026' into (true_id, start_date, end_date).
+    If only one date is present, start_date == end_date.
+    Returns (None, None, None) if the key doesn't match the expected shape.
+    """
+    match = _DEVICE_KEY_PATTERN.match(device_key)
+    if not match:
+        return None, None, None
+
+    true_id = match.group("device_id")
+    date_parts = match.group("dates").split("_")
+
+    dates = []
+    for part in date_parts:
+        try:
+            dates.append(datetime.strptime(part.strip(), _DATE_FORMAT))
+        except ValueError:
+            continue  # skip anything that doesn't parse (e.g. malformed dates)
+
+    if not dates:
+        return true_id, None, None
+    if len(dates) == 1:
+        return true_id, dates[0], dates[0]
+    return true_id, dates[0], dates[-1]
+
+
+def list_device_ids(data: dict, device_type: str) -> list[str]:
+    """Returns the sorted, de-duplicated list of true device IDs (serials) for a device_type."""
+    ids = set()
+    for device_key in data.get(device_type, {}):
+        true_id, _, _ = _parse_device_key(device_key)
+        if true_id:
+            ids.add(true_id)
+    return sorted(ids)
+
+
+def find_files_for_id(data: dict, device_type: str, true_id: str) -> list[str]:
+    """Returns all device_id keys (filenames) belonging to one physical device, oldest to newest."""
+    matches = []
+    for device_key in data.get(device_type, {}):
+        parsed_id, start, _ = _parse_device_key(device_key)
+        if parsed_id == true_id:
+            matches.append((device_key, start))
+    matches.sort(key=lambda pair: (pair[1] is None, pair[1]))
+    return [key for key, _ in matches]
+
+
+def latest_file_for_id(data: dict, device_type: str, true_id: str) -> str | None:
+    """Returns the device_id key (filename) with the most recent end_date for a given true device ID."""
+    matches = []
+    for device_key in data.get(device_type, {}):
+        parsed_id, _, end = _parse_device_key(device_key)
+        if parsed_id == true_id and end is not None:
+            matches.append((device_key, end))
+    if not matches:
+        return None
+    matches.sort(key=lambda pair: pair[1])
+    return matches[-1][0]
+
+def merge_device_files(data: dict, device_type: str, true_id: str) -> dict[str, pd.DataFrame]:
+    """
+    Merges all file-chunks belonging to one physical device (true_id) into
+    a single {table_name: DataFrame} dict, ordered chronologically.
+
+    Overlapping rows that are IDENTICAL across files are deduplicated,
+    keeping the version from the OLDEST file. Overlapping rows with
+    DIFFERING values are both kept (resulting in duplicate datetimes) —
+    this surfaces the conflict rather than silently picking a winner.
+    """
+    keys = find_files_for_id(data, device_type, true_id)  # oldest -> newest
+    if not keys:
+        return {}
+
+    table_frames: dict[str, list[pd.DataFrame]] = {}
+    for key in keys:
+        content = get(data, device_type, key)  # {table_name: DataFrame}, already unwrapped
+        for table_name, df in content.items():
+            table_frames.setdefault(table_name, []).append(df)
+
+    merged_tables = {}
+    for table_name, dfs in table_frames.items():
+        combined = pd.concat(dfs, ignore_index=True)
+
+        if "datetime" in combined.columns:
+            # stable sort preserves original (chronological file) order for
+            # rows that share the same datetime — required for keep="first"
+            # to correctly favor the OLDEST file's version
+            combined = combined.sort_values("datetime", kind="stable")
+
+        before = len(combined)
+        combined = combined.drop_duplicates(keep="first").reset_index(drop=True)
+        dropped = before - len(combined)
+
+        # flag any datetimes that still repeat after dedup — these are
+        # genuine conflicts (same timestamp, different values)
+        if "datetime" in combined.columns:
+            conflict_count = combined["datetime"].duplicated().sum()
+            if conflict_count > 0:
+                print(
+                    f"⚠️ {true_id} / {table_name}: {conflict_count} datetime(s) "
+                    f"still duplicated after merge — same timestamp, differing values"
+                )
+
+        merged_tables[table_name] = combined
+
+    return merged_tables
+
+
+def consolidate_device_ids(data: dict, device_type: str) -> dict[str, dict[str, pd.DataFrame]]:
+    """
+    Merges all file-chunks for every physical device under a device_type
+    into one entry per true device ID.
+
+    Returns
+    -------
+    dict
+        { true_device_id: { table_name: merged_DataFrame } }
+    """
+    ids = list_device_ids(data, device_type)
+    return {true_id: merge_device_files(data, device_type, true_id) for true_id in ids}
