@@ -85,7 +85,7 @@ fitbit_devices: # for fitbit accounts, go to extract/config/secrets/fitbit/accou
 sites:
   kolkata:
   fitbit_client_secret_path: extract/config/secrets/fitbit/client_secret.json 
-    atmotube_api_key_site: ATMOTUBE_API_KEY_KOLKATA   # placeholder for later
+    # atmotube_api_key_site: ATMOTUBE_API_KEY_KOLKATA   # placeholder for later
   # toronto:
   #   fitbit_client_secret_path: extract/config/secrets/fitbit/client_secret.json  # same OAuth client, shared
   #   atmotube_api_key_site: ATMOTUBE_API_KEY_TORONTO
