@@ -9,14 +9,14 @@ A Python-based, portable, and customizable pipeline for pulling, standardizing, 
 
 Built for a multi-site study tracking environmental exposure (Atmotube air quality sensors) and biometric data (Fitbit / Google Health) across rotating device assignments and multiple participants — but designed to be extended to any new device type with its own API and parser.
 
-1. What does this project do?
+1. **What does this project do?**
 
 - *Ingests*: Scheduled daily extraction from each device's cloud API (Atmotube, Google Health/Fitbit), on a daily cron schedule, with built-in rate limiting. 
 - *Processes*: Standardizes and validates per device type — parsing raw API responses into clean, typed, timezone-normalized dataframes ready for analysis.
 - *Stores*: Maintains a remote PostgreSQL + PostGIS database (via Docker) for raw + processed data with device/participant assignment tracking to reconcile data across a rotating-device study design.
 - *Visualizes*: Provides non-technical abilities to visualize the data — internal-facing DB dashboard via Metabase (planned) and public-facing analytical reports via GitHub Pages (`docs/`) — eparate from the automated pipeline.
 
-2. Why does this exists?
+2. **Why does this exists?**
 
 Built specifically for a small-scale research (sole maintainer, few dozens of devices) where heavy ETL frameworks (Meltano, Iceberg) are overkill. It delivers the smallest, most maintainable system that ensures reproducibility and allows easy extension to new device types without modifying core logic.
 
