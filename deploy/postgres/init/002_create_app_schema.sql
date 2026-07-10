@@ -1,8 +1,10 @@
--- src/load/schema.sql
+-- ============================================================
+-- 1. CREATE SCHEMAS (Must happen BEFORE tables)
+CREATE SCHEMA IF NOT EXISTS raw;
+CREATE SCHEMA IF NOT EXISTS processed;
 
 -- ============================================================
--- RAW SCHEMA — immutable landing zone, exact API payloads
-
+-- 2. RAW SCHEMA — immutable landing zone
 CREATE TABLE IF NOT EXISTS raw.api_pulls (
     id           BIGSERIAL PRIMARY KEY,
     device_type  TEXT NOT NULL,
@@ -18,8 +20,7 @@ CREATE INDEX IF NOT EXISTS idx_raw_api_pulls_payload_gin
     ON raw.api_pulls USING GIN (payload);
 
 -- ============================================================
--- PROCESSED SCHEMA — parsed/standardized, PostGIS-enabled
-
+-- 3. PROCESSED SCHEMA — parsed/standardized
 CREATE TABLE IF NOT EXISTS processed.devices (
     device_id    TEXT PRIMARY KEY,
     device_type  TEXT NOT NULL,
@@ -44,4 +45,4 @@ CREATE TABLE IF NOT EXISTS processed.pipeline_runs (
     finished_at   TIMESTAMPTZ,
     status        TEXT NOT NULL,
     error_message TEXT
-);
+);   

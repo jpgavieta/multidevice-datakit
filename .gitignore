@@ -2,7 +2,7 @@ __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 
-#  ALL .html files anywhere in repo
+# ALL .html files anywhere in repo
 *.html
 
 # Virtual environments
@@ -13,6 +13,7 @@ ENV/
 # IDE (only personal settings, not workspace config)
 .idea/
 *.swp
+.vscode/
 
 # OS
 .DS_Store
@@ -21,4 +22,24 @@ ENV/
 # API secrets + device accounts
 **/secrets/
 
-.gitattributes
+# ENVIRONMENT SECRETS (Critical: protects deploy/.env)
+.env
+.env.local
+.env.*.local
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Grafana
+# Ignore runtime data (users, sessions, sqlite DB)
+grafana/grafana-data/
+deploy/grafana/grafana-data/
+
+# BUT ensure dashboard JSON configs are tracked
+# but explicit inclusion if needs narrowing later: 
+#!grafana/dashboard-json/*.json
+#!deploy/grafana/dashboard-json/*.json
+.json
+
+.gitattributes   
