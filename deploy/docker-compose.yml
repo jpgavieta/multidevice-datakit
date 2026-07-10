@@ -43,3 +43,4 @@ networks:
     driver: bridge
 
 # USAGE: docker compose -f deploy/docker-compose.yml up -d
+# sanity check: docker logs app_postgres   

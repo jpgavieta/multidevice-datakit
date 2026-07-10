@@ -104,16 +104,21 @@ def _wait_for_code() -> str:
     return _CallbackHandler.code
 
 
-def get_access_token(device_id: str) -> str:
+def get_access_token(device_id: str, allow_interactive: bool = True) -> str:
     """
     Returns a valid access token for this device's Google Health account.
-    First call for a device opens a browser for that device's account to
-    sign in and approve access; every later call refreshes silently.
+    If allow_interactive is False and no token exists yet, raises instead of opening a browser.
+    Use this for scheduled/batch pulls where an un-onboarded device should fail loudly, NOT silently launch OAuth.
     """
     token_file = _token_file(device_id)
     if token_file.exists():
         tokens = json.loads(token_file.read_text())
         return _refresh_access_token(device_id, tokens)
+    if not allow_interactive:
+        raise RuntimeError(
+            f"No saved token for '{device_id}' — device not onboarded. "
+            f"Run: python -m extract.scripts.onboard_new_fitbit {device_id}"
+        )
     return _run_interactive_auth(device_id)
 
 

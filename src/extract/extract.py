@@ -31,10 +31,12 @@ def get_date_range(device_start_date: str | None = None, end_date=None) -> tuple
     -   If device_start_date is unset: defaults to yesterday-only, for regular scheduled runs.
     """
     end = end_date or date.today()
-    if device_start_date:
+    if device_start_date is not None:
+        device_start_date = str(device_start_date)
         start = date.fromisoformat(device_start_date)
     else:
         start = end - timedelta(days=1)
+
     return start, end
 
 def _pull_one_device(device_type: str, device_id: str, start_date: str, end_date: str):

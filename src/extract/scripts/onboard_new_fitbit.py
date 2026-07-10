@@ -33,7 +33,7 @@ def main():
     print("Sign in to THIS DEVICE'S Google account, not your own.\n")
 
     try:
-        access_token = get_fitbit_token(device_id)
+        access_token = get_fitbit_token(device_id, allow_interactive=True) # This is the ONlY way to onboard a device and launch OAuth
     except Exception as e:
         print(f"\n❌ OAuth flow failed for '{device_id}': {e}")
         sys.exit(1)

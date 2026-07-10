@@ -1,7 +1,7 @@
 import pandas as pd
 
-from .parsers import atmotube
-from .parsers import ponyopi
+from .parsers import atmotube_parser
+from .parsers import ponyopi_parser
 
 # This should work REGARDLESS of the extract data method (read files or call apis)
 
@@ -12,8 +12,8 @@ from .parsers import ponyopi
 # Maps the "device_type" (top-level key) to the specific parser module
 
 DEVICE_REGISTRY = {
-    "Atmotube": atmotube,
-    "Ponyopi": ponyopi,
+    "Atmotube": atmotube_parser,
+    "Ponyopi": ponyopi_parser,
 }
 
 # ============================================================================================================

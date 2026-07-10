@@ -15,8 +15,8 @@ from .fitbit_tokens import get_access_token as _fitbit_get_access_token
 # from .atmotube_tokens import get_api_key as get_atmotube_key   # uncomment once built
 
 
-def get_fitbit_token(device_id: str) -> str:
-    return _fitbit_get_access_token(device_id)
+def get_fitbit_token(device_id: str, allow_interactive: bool = False) -> str:
+    return _fitbit_get_access_token(device_id, allow_interactive=allow_interactive)
 
 
 # def get_atmotube_token(device_id: str) -> str:

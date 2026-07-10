@@ -7,13 +7,15 @@ populated separately, later, by the transform step.
 
 import os
 import json
+from pathlib import Path
 from datetime import datetime, timezone
 
 import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
-load_dotenv()
+ENV_PATH = Path(__file__).resolve().parents[2] / "deploy" / ".env"
+load_dotenv(dotenv_path=ENV_PATH)
 
 
 def _get_connection():

@@ -353,18 +353,17 @@ def find_earliest_data(device_id: str, start_date: str, end_date: str) -> dict[s
     return earliest
 
 
-def extract_raw_data(device_id: str, start_date: str, end_date: str) -> dict:
+def extract_raw_data(device_id: str, start_date: str, end_date: str, allow_interactive: bool = False) -> dict:
     """
     Pulls all Fitbit data types for one device over one date range.
     Returns raw, unmodified JSON response:
         {"steps": {...}, "heart-rate": {...}, "sleep": {...}, "distance": {...}, "profile": {...}}
     Any single data type failing doesn't stop the others. Data types are
-    fetched concurrently, bounded to MAX_WORKERS_PER_DEVICE to avoid stacking
-    on top of extract.py's own per-device threading.
+    fetched concurrently, bounded to MAX_WORKERS_PER_DEVICE to avoid stacking on top of extract.py's own per-device threading.
     No parsing here — that's transform's job, later
     """
     try:
-        access_token = get_fitbit_token(device_id)
+        access_token = get_fitbit_token(device_id, allow_interactive=allow_interactive)
     except Exception as e:
         raise NotImplementedError(
             f"Fitbit client not yet wired up for {device_id}: {e}"
