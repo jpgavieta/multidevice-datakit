@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from ..registries.fitbit_registry import FITBIT_REGISTRY, BESPOKE_DATA_TYPES, UNMAPPED_DATA_TYPES
+from .registry.fitbit_registry import FITBIT_REGISTRY, BESPOKE_DATA_TYPES, UNMAPPED_DATA_TYPES
 
 
 def _to_camel(data_type: str) -> str:
@@ -79,7 +79,7 @@ def _parse_registry_type(data_type: str, points: list, device_id: str, tz_name: 
 
         if rules["destination"] == "states":
             label = (_get(nested, rules["state_field"])
-                    if rules["state_field"] else rules["constant_label"])
+                      if rules["state_field"] else rules["constant_label"])
             rows.append({**base, "state_value": label})
             continue
 
@@ -135,7 +135,7 @@ def _parse_hr_zones(points: list, device_id: str, tz_name: str) -> list:
 def _parse_respiratory_sleep_summary(points: list, device_id: str, tz_name: str) -> list:
     """respiratory-rate-sleep-summary — 4 sleep stages x 3 metrics each, tagged by stage."""
     stage_keys = {"deepSleepStats": "deep", "lightSleepStats": "light",
-                "remSleepStats": "rem", "fullSleepStats": "full"}
+                  "remSleepStats": "rem", "fullSleepStats": "full"}
     field_metrics = {
         "breathsPerMinute": "respiratory_rate_brpm",
         "standardDeviation": "respiratory_rate_stddev",
@@ -165,7 +165,7 @@ def _parse_sleep(points: list, device_id: str) -> tuple[list, list]:
         end = pd.to_datetime(_get(nested, "interval.endTime"), utc=True)
         summary = nested.get("summary", {})
         sessions.append({
-            "device_id": device_id, "start_at": start, "end_at": end,
+            "device_id": device_id, "started_at": start, "end_at": end,
             "sleep_type": nested.get("type"),
             "is_nap": (nested.get("metadata") or {}).get("nap"),
             "minutes_in_sleep_period": summary.get("minutesInSleepPeriod"),
@@ -177,9 +177,9 @@ def _parse_sleep(points: list, device_id: str) -> tuple[list, list]:
         for stage in nested.get("stages", []):
             stages.append({
                 "device_id": device_id,          # resolved to session_id in load.py, after the session insert
-                "session_start_at": start,        # join key back to the parent session row
-                "start_at": pd.to_datetime(stage["startTime"], utc=True),
-                "end_at": pd.to_datetime(stage["endTime"], utc=True),
+                "session_started_at": start,       # join key back to the parent session row
+                "started_at": pd.to_datetime(stage["startTime"], utc=True),
+                "ended_at": pd.to_datetime(stage["endTime"], utc=True),
                 "stage_type": stage.get("type"),
             })
     return sessions, stages
@@ -195,7 +195,7 @@ def _parse_exercise(points: list, device_id: str) -> list:
         summary = nested.get("metricsSummary", {})
         zone_durations = summary.get("heartRateZoneDurations", {})
         rows.append({
-            "device_id": device_id, "start_at": start, "end_at": end,
+            "device_id": device_id, "started_at": start, "end_at": end,
             "exercise_type": nested.get("exerciseType"),
             "display_name": nested.get("displayName"),
             "calories_kcal": summary.get("caloriesKcal"),
@@ -218,7 +218,7 @@ def parse(raw_data: dict, device_id: str, timezone: str) -> dict:
     'daily' grain records), returns row-dicts keyed by destination table, ready
     for execute_values() — NOT DataFrames:
     {"readings": [ {...}, ... ], "states": [...], "sleep_sessions": [...],
-    "sleep_stages": [...], "exercise_sessions": [...]} — a key is omitted if
+     "sleep_stages": [...], "exercise_sessions": [...]} — a key is omitted if
     that device's pull had no rows for that destination.
     """
     readings_rows, states_rows = [], []

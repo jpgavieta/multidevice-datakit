@@ -1,52 +1,51 @@
 # transform/parsers/atmotube_parser.py
 """
 Parses raw Atmotube API responses (from extract/clients/atmotube_client.py,
-live or replayed via backfill_atmotube.py) into a single DataFrame matching
-atmotube.readings.
+live or replayed via backfill_atmotube.py) into row-dicts matching
+atmotube.readings — ready for execute_values(), same shape fitbit_parser.py emits.
 
-date is already true UTC ISO 8601 — no timezone conversion needed here,
-unlike Fitbit's daily-grain records.
+date is already true UTC ISO 8601 — no explicit parsing happens here or in
+load.py; the raw string is passed straight through to psycopg2, and Postgres
+does the text -> TIMESTAMPTZ cast implicitly on insert into recorded_at.
 
-location is NOT built as a geometry object in pandas — that's fragile and
-unnecessary. This parser emits plain 'latitude'/'longitude' columns; load.py
-builds the PostGIS point at insert time via ST_SetSRID(ST_MakePoint(...)).
+latitude/longitude are kept as plain float fields on each row-dict (NOT built
+into a geometry object here) — load.py's _build_location() turns them into an
+EWKT point string at insert time (wrapped in ST_GeomFromEWKT(...) via the
+WKT_COLUMNS mapping in _upsert_rows()), so both keys survive this parser only
+to be popped by load.py's _prepare_atmotube_rows() once the geometry's built.
 """
 
-import pandas as pd
-
-from .atmotube_registry import ATMOTUBE_REGISTRY
+from .registry.atmotube_registry import ATMOTUBE_REGISTRY
 
 
-def parse(raw_data: dict, device_id: str) -> dict:
+def parse(raw_data: dict, device_id: str, timezone: str | None = None) -> dict:
     """
     Takes the raw dict returned by extract.clients.atmotube_client.extract_raw_data()
     (or the equivalent reconstructed by backfill_atmotube.py), returns
-    {"readings": DataFrame} shaped to match atmotube.readings' columns exactly
-    (minus id/ingestion_id, which load.py fills in once the raw row is inserted).
+    {"readings": [ {row}, ... ]} — one dict per record, keys matching
+    atmotube.readings' columns exactly (minus id/ingestion_id/location, which
+    load.py fills in: ingest_id once the raw row is inserted, location from
+    latitude/longitude via _build_location()).
+
+    timezone is accepted but unused — Atmotube's 'date' field is already true UTC,
+    no localization needed. It's here only so transform.py can call every parser
+    with the same (payload, device_id, timezone) signature without branching on
+    device_type.
     """
     records = raw_data.get("merged_data", [])
     if not records:
-        return {"readings": pd.DataFrame()}
+        return {"readings": []}
 
-    df = pd.DataFrame(records)
+    rows = []
+    for record in records:
+        row = {
+            "device_id": device_id,
+            "recorded_at": record.get("date"),   # passed through as-is; Postgres casts on insert
+            "latitude": record.get("lat"),
+            "longitude": record.get("lon"),
+        }
+        for raw_key, (standard_name, _unit, _dtype, _category) in ATMOTUBE_REGISTRY.items():
+            row[standard_name] = record.get(raw_key)
+        rows.append(row)
 
-    # recorded_at — already UTC, just needs parsing
-    df["recorded_at"] = pd.to_datetime(df["date"], utc=True)
-
-    # lat/lon kept as plain columns — geometry built later, in load.py's SQL
-    df["latitude"] = df.get("lat")
-    df["longitude"] = df.get("lon")
-
-    out = pd.DataFrame({"recorded_at": df["recorded_at"],
-                        "latitude": df["latitude"],
-                        "longitude": df["longitude"]})
-
-    for raw_key, (standard_name, _unit, dtype, _category) in ATMOTUBE_REGISTRY.items():
-        if raw_key not in df.columns:
-            out[standard_name] = pd.Series([pd.NA] * len(df), dtype=dtype)
-            continue
-        out[standard_name] = df[raw_key].astype(dtype)
-
-    out["device_id"] = device_id
-
-    return {"readings": out}
+    return {"readings": rows}

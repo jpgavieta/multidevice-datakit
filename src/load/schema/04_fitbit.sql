@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS fitbit.readings (
     tag            TEXT,                -- sub-label within a metric, e.g. zone name; NULL when a metric has none
     value_numeric  DOUBLE PRECISION,
     value_text     TEXT,
-    ingest_id   BIGINT REFERENCES raw.ingests(id),
+    ingest_id  BIGINT REFERENCES raw.ingests(id),
     UNIQUE (device_id, data_type, recorded_at, metric, tag)
 );
 
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS fitbit.states (
     recorded_at    TIMESTAMPTZ NOT NULL,
     ended_at         TIMESTAMPTZ,
     state_value    TEXT NOT NULL,       -- e.g. "SEDENTARY", or activityLevelType's label
-    ingest_id   BIGINT REFERENCES raw.ingests(id),
+    ingest_id  BIGINT REFERENCES raw.ingests(id),
     UNIQUE (device_id, data_type, recorded_at)
 );
 
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS fitbit.sleep_sessions (
     minutes_to_fall_asleep    INTEGER,
     minutes_asleep            INTEGER,
     minutes_awake             INTEGER,
-    ingest_id              BIGINT REFERENCES raw.ingests(id),
+    ingest_id  BIGINT REFERENCES raw.ingests(id),
     UNIQUE (device_id, started_at)
 );
 
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS fitbit.exercise_sessions (
     moderate_time_sec        INTEGER,
     vigorous_time_sec        INTEGER,
     peak_time_sec            INTEGER,
-    ingest_id             BIGINT REFERENCES raw.ingests(id),
+    ingest_id  BIGINT REFERENCES raw.ingests(id),
     UNIQUE (device_id, started_at)
 );
 
