@@ -1,0 +1,88 @@
+# config/participants.yaml
+# ============================================================================================================
+# PARTICPANTS + device assignments (which, when?)
+
+study_participants:
+  - id: pt_kol_01
+    site: kolkata
+    enrolled_at: null
+    notes: ""
+    device_assignments:
+      - device_id: fitbit_kol_01
+        assigned_from: null
+        assigned_until: null
+      - device_id: atmotube_kol_01
+        assigned_from: null
+        assigned_until: null
+
+  - id: pt_kol_02
+    site: kolkata
+    enrolled_at: null
+    notes: ""
+    device_assignments:
+      - device_id: fitbit_kol_02
+        assigned_from: null
+        assigned_until: null
+      - device_id: atmotube_kol_02
+        assigned_from: null
+        assigned_until: null
+
+  - id: pt_kol_03
+    site: kolkata
+    enrolled_at: null
+    notes: ""
+    device_assignments:
+      - device_id: fitbit_kol_03
+        assigned_from: null
+        assigned_until: null
+      - device_id: atmotube_kol_03
+        assigned_from: null
+        assigned_until: null
+
+  - id: pt_kol_04
+    site: kolkata
+    enrolled_at: null
+    notes: ""
+    device_assignments:
+      - device_id: fitbit_kol_04
+        assigned_from: null
+        assigned_until: null
+      - device_id: atmotube_kol_04
+        assigned_from: null
+        assigned_until: null
+
+  - id: pt_kol_05
+    site: kolkata
+    enrolled_at: null
+    notes: ""
+    device_assignments:
+      - device_id: fitbit_kol_05
+        assigned_from: null
+        assigned_until: null
+      - device_id: atmotube_kol_05
+        assigned_from: null
+        assigned_until: null
+
+  - id: pt_kol_06
+    site: kolkata
+    enrolled_at: null
+    notes: ""
+    device_assignments:
+      - device_id: fitbit_kol_06
+        assigned_from: null
+        assigned_until: null
+      - device_id: atmotube_kol_06
+        assigned_from: null
+        assigned_until: null
+
+  - id: pt_kol_07
+    site: kolkata
+    enrolled_at: null
+    notes: ""
+    device_assignments:
+      - device_id: fitbit_kol_07
+        assigned_from: null
+        assigned_until: null
+      - device_id: atmotube_kol_07
+        assigned_from: null
+        assigned_until: null

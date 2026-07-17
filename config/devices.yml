@@ -1,5 +1,4 @@
-# config/devices.yml
-
+# config/sources.yml
 # ============================================================================================================
 # DEVICES + access info
 # Fitbit google accounts are stored in ./extract/secrets/fitbit/.env.access
@@ -75,7 +74,7 @@ atmotube_devices:
     type: atmotube
     site: kolkata
     timezone: Asia/Kolkata
-    start_date: null  
+    start_date: 2026-06-30  # NOTE: its day AFTER the CSV's last real row, not the API pairing date (for all 2026-07-13, except 07)
     end_date: null
     mac: !ENV ATMOTUBE_KOL_01_MAC
 
@@ -83,7 +82,7 @@ atmotube_devices:
     type: atmotube
     site: kolkata
     timezone: Asia/Kolkata
-    start_date: 2026-06-13  # Confirm with field researcher 
+    start_date: 2026-07-03 
     end_date: null
     mac: !ENV ATMOTUBE_KOL_02_MAC
 
@@ -91,7 +90,7 @@ atmotube_devices:
     type: atmotube
     site: kolkata
     timezone: Asia/Kolkata
-    start_date: null
+    start_date: 2026-06-25
     end_date: null
     mac: !ENV ATMOTUBE_KOL_03_MAC
 
@@ -99,7 +98,7 @@ atmotube_devices:
     type: atmotube
     site: kolkata
     timezone: Asia/Kolkata
-    start_date: null
+    start_date: 2026-07-03
     end_date: null
     mac: !ENV ATMOTUBE_KOL_04_MAC
 
@@ -107,7 +106,7 @@ atmotube_devices:
     type: atmotube
     site: kolkata
     timezone: Asia/Kolkata
-    start_date: 2026-07-03  # Confirm with field researcher 
+    start_date: 2026-07-03   
     end_date: null
     mac: !ENV ATMOTUBE_KOL_05_MAC
 
@@ -115,7 +114,7 @@ atmotube_devices:
     type: atmotube
     site: kolkata
     timezone: Asia/Kolkata
-    start_date: 2026-07-08  # Confirm with field researcher 
+    start_date: 2026-07-05  
     end_date: null
     mac: !ENV ATMOTUBE_KOL_06_MAC
 
@@ -123,7 +122,7 @@ atmotube_devices:
     type: atmotube
     site: kolkata
     timezone: Asia/Kolkata
-    start_date: null
+    start_date: 2026-06-12
     end_date: null
     mac: !ENV ATMOTUBE_KOL_07_MAC
 

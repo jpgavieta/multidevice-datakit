@@ -28,6 +28,10 @@ CLIENT_REGISTRY = {
 #   -   atmotube_client's MAX_WORKERS_PER_DEVICE=2) 
 DEVICE_COUNT = 13 # Only outer per-device cap, NOT total cocurrent request; update increase/decrease number of devices in devices.yml
 
+# Must match raw.ingests.ingest_method's CHECK constraint (src/load/schemas/01_raw.sql).
+# 'csv_manual' is never produced here — see extract/scripts/backfill_atmotube.py.
+VALID_INGEST_METHODS = {"api_auto", "api_manual", "csv_manual"}
+
 # ============================================================================================================
 
 
@@ -62,12 +66,18 @@ def extract_all_devices(
     config_path: str = "config/devices.yml",
     end_date: str | None = None,
     max_workers: int = DEVICE_COUNT,
+    ingest_method: str = "api_auto",
 ) -> dict[str, dict[str, dict]]:
     """
-    Pulls raw API data for every device in the registry: device_type -> device_id -> raw_payload.
-    Each device's date range is computed individually via get_date_range(), using that
-    device's own start_date from devices.yml — NOT a single global range for all devices.
+    Pulls raw API data for every device in the registry: device_type -> device_id -> {"payload": ..., "ingest_method": ...}.
+    Each device's date range is computed individually via get_date_range(), using that device's own start_date from devices.yml — NOT a single global range for all devices.
+
+    ingest_method is uniform for the whole run (not per-device) — pass "api_auto" for scheduler-triggered runs (the default) or "api_manual" for an ad-hoc/manual run.
+    It's written straight through to raw.ingests.ingest_method by load.py, so it must be one of VALID_INGEST_METHODS.
     """
+    if ingest_method not in VALID_INGEST_METHODS:
+        raise ValueError(f"Invalid ingest_method={ingest_method!r}; must be one of {VALID_INGEST_METHODS}")
+
     devices = load_devices(config_path)
     if not devices:
         print(f"❌ No devices found in {config_path}")
@@ -102,7 +112,10 @@ def extract_all_devices(
                 safe_print(f"   ❌ Failed {device_id} [{device_type}]: {error}")
                 continue
 
-            all_data.setdefault(device_type, {})[device_id] = raw_payload
+            all_data.setdefault(device_type, {})[device_id] = {
+                "payload": raw_payload,
+                "ingest_method": ingest_method,
+            }
             safe_print(f"   ✅ Pulled {device_id} [{device_type}]")
 
     for device_type in list(all_data.keys()):

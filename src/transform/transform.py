@@ -1,45 +1,50 @@
 import pandas as pd
 
 from .parsers import atmotube_parser
-from .parsers import ponyopi_parser
+from .parsers import fitbit_parser
+# from .parsers import ponyopi_parser
 
 # This should work REGARDLESS of the extract data method (read files or call apis)
-
 # Logic is all based on device_type, looping over each device_id within it.
 
 # ============================================================================================================
 # Device Registry
 # Maps the "device_type" (top-level key) to the specific parser module
+# NOTE: keys are lowercase to match devices.yml / extract.py's CLIENT_REGISTRY
+# (extract.py: CLIENT_REGISTRY = {"fitbit": ..., "atmotube": ...})
 
 DEVICE_REGISTRY = {
-    "Atmotube": atmotube_parser,
-    "Ponyopi": ponyopi_parser,
+    "atmotube": atmotube_parser,
+    "fitbit": fitbit_parser,
+    # "ponyopi": ponyopi_parser,
 }
 
 # ============================================================================================================
 # Pure Transformation Logic
 
 def transform_device_data(
-    raw_data: dict[str, dict[str, pd.DataFrame]]
+    raw_data: dict[str, dict[str, dict]]
 ) -> dict[str, dict[str, dict]]:
     """
-    Applies device-specific parsers to raw DataFrames, one device_id at a time.
+    Applies device-specific parsers to raw payloads, one device_id at a time.
 
-    IMPORTANT: parsing happens per device_id, never on combined/concatenated
-    data. Some files are JSON-blob format, others pre-flattened — each
-    parser auto-detects that from its own single input, so every device_id
-    must be parsed independently or that detection breaks.
+    IMPORTANT: parsing happens per device_id, never on combined/concatenated data. 
+    Some files are JSON-blob format, others pre-flattened — each parser auto-detects that from its own single input, 
+    so every device_id must be parsed independently or that detection breaks.
 
     Parameters
     ----------
     raw_data : dict
-        { device_type: { device_id: raw_df } } — output of extract.py
+        { device_type: { device_id: {"payload": raw_df, "ingest_method": str} } } —
+        output of extract.py's extract_all_devices(). Only "payload" is parsed here;
+        "ingest_method" is raw.ingests metadata, not parser input, so it's ignored.
 
     Returns
     -------
     dict
-        { device_type: { device_id: { "data": { df_name: { "df": <DataFrame>: {...} } } } } 
-        Example: {'Atmotube': {'C3CBE16AE294_01-May-2026_12-Jun-2026': {'data': {'gis': {'df': <DataFrame> } } } } } 
+        { device_type: { device_id: { "data": { table_name: [ {row}, ... ] } } } } —
+        each table_name maps to a list of row-dicts ready for execute_values(), NOT a DataFrame.
+        Example: {'atmotube': {'C3CBE16AE294_01-May-2026_12-Jun-2026': {'data': {'readings': [{...}, ...]}}}}
     """
     results: dict[str, dict[str, dict]] = {}
 
@@ -51,19 +56,15 @@ def transform_device_data(
         parser_module = DEVICE_REGISTRY[device_type]
         results[device_type] = {}
 
-        for device_id, raw_df in device_files.items():
+        for device_id, entry in device_files.items():
             try:
-                # Apply the parser (Transform Step) — one device_id at a time
-                parsed_result = parser_module.parse(raw_df)
+                # Apply the parser (Transform Step) — one device_id at a time.
+                # entry["ingest_method"] is not used here; it's raw.ingests metadata only.
+                # timezone is only meaningful to fitbit_parser (daily-grain localization);
+                # atmotube_parser accepts and ignores it for a uniform call signature.
+                parsed_result = parser_module.parse(entry["payload"], device_id, entry.get("timezone"))
 
-                results[device_type][device_id] = { 
-                    "data": {
-                        key: {  
-                            "df": df,
-                        }
-                        for key, df in parsed_result.items()
-                    }
-                }
+                results[device_type][device_id] = {"data": parsed_result}
                 print(f"✅ Transformed {device_type}/{device_id}")
 
             except Exception as e:
@@ -71,5 +72,4 @@ def transform_device_data(
 
     return results
 # Example: transformed = transform_device_data(raw_data)
-#          transformed["Atmotube"]["C3CBE16AE294_01-May-2026_12-Jun-2026"]["data"]["pm"]["df"]   # PM DataFrame for that device_id
-#          transformed["Atmotube"]["C3CBE16AE294_01-May-2026_12-Jun-2026"]["data"]["gis"]["df"]  # GIS DataFrame for that device_id
+#          transformed["atmotube"]["C3CBE16AE294_01-May-2026_12-Jun-2026"]["data"]["readings"]  # list[dict] of readings rows for that device_id

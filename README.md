@@ -1,4 +1,4 @@
-# MultiDevice DataToolkit
+# MultiDevice Datakit
 
 > 🚧 Work in progress !
 > This is an evolving research data pipeline, not a finished product. 

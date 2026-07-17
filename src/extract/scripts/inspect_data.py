@@ -11,8 +11,19 @@ USAGE:
     # Fitbit — inspect one data type
 python -m extract.scripts.inspect_data fitbit_kol_01 --data-type daily-resting-heart-rate
 
-    # Fitbit — full response for a type, not just first point
+    # Fitbit — full response for ONE type, not just first point
 python -m extract.scripts.inspect_data fitbit_kol_01 --data-type floors --full
+
+    # Fitbit — one sample record from EVERY non-empty data type (for building
+    # the field-mapping registry — much more useful than --full, which dumps
+    # every single record across all 21+ types)
+python -m extract.scripts.inspect_data fitbit_kol_01 --samples
+
+    # Fitbit — FULL response for EVERY non-empty data type (no --data-type needed)
+    # --full alone triggers the multi-type loop, same as --samples, but prints every record instead of just the first per type
+python -m extract.scripts.inspect_data fitbit_kol_01 --full
+# OR (to save as a JSON file)
+python -m extract.scripts.inspect_data fitbit_kol_01 --full > fitbit_kol_01_full.json
 
     # Fitbit — force dailyRollUp for a type not yet in DAILY_ROLLUP_TYPES
 python -m extract.scripts.inspect_data fitbit_kol_01 --data-type floors --rollup
@@ -20,7 +31,7 @@ python -m extract.scripts.inspect_data fitbit_kol_01 --data-type floors --rollup
     # Atmotube — no --data-type needed, one data stream per device
 python -m extract.scripts.inspect_data atmotube_kol_01
 
-    # Custom date range (default: last 30 days)
+    # Custom date range (default: last 30 days if no --end)
 python -m extract.scripts.inspect_data atmotube_kol_01 --start 2026-07-01 --end 2026-07-09
 """
 
@@ -39,10 +50,36 @@ def _inspect_fitbit(device: dict, args):
         _get_data_points,
         _get_daily_rollup,
         DAILY_ROLLUP_TYPES,
+        extract_raw_data,
     )
 
+    if args.samples or (args.full and not args.data_type):
+        raw = extract_raw_data(device, args.start, args.end)
+        label = "full response, every data type" if args.full else "one sample per data type"
+        print(f"\nfitbit [{device['id']}]: {label} [{args.start} → {args.end}]")
+
+        for data_type, payload in raw.items():
+            if data_type == "profile":
+                if payload:
+                    print(f"\n=== profile ===")
+                    print(json.dumps(payload, indent=2))
+                else:
+                    print(f"\n=== profile === None")
+                continue
+
+            points_key = "rollupDataPoints" if data_type in DAILY_ROLLUP_TYPES else "dataPoints"
+            points = payload.get(points_key, []) if payload else []
+            if not points:
+                continue
+            print(f"\n=== {data_type} ({len(points)} point(s)) ===")
+            if args.full:
+                print(json.dumps(points, indent=2))
+            else:
+                print(json.dumps(points[0], indent=2))
+        return
+
     if not args.data_type:
-        print("❌ --data-type is required for fitbit devices")
+        print("❌ --data-type is required for fitbit devices (or use --samples / --full for all types)")
         return
 
     token = get_fitbit_token(device["id"])
@@ -94,11 +131,12 @@ INSPECTORS = {
 def main():
     parser = argparse.ArgumentParser(description="Inspect a raw API response for one device.")
     parser.add_argument("device_id")
-    parser.add_argument("--data-type", default=None, help="Required for fitbit; ignored for atmotube")
+    parser.add_argument("--data-type", default=None, help="Required for fitbit unless --samples/--full used alone")
     parser.add_argument("--start", default=str(date.today() - timedelta(days=30)))
     parser.add_argument("--end", default=str(date.today()))
-    parser.add_argument("--full", action="store_true", help="Print the full response, not just the first record")
+    parser.add_argument("--full", action="store_true", help="Print full response(s), not just the first record")
     parser.add_argument("--rollup", action="store_true", help="Fitbit only: force dailyRollUp")
+    parser.add_argument("--samples", action="store_true", help="Fitbit only: print one sample record per non-empty data type")
     args = parser.parse_args()
 
     devices = {d["id"]: d for d in load_devices()}
