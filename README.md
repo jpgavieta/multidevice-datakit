@@ -25,7 +25,7 @@ Built specifically for a small-scale research (sole maintainer, some dozen devic
 
 ## Data Flow from Multiple Devices
 
-The data pipeline starts from wherever the data is kept. `load.py`'s `__main__` block orchestrates the full run: it calls `extract.extract_all_devices()` to pull raw payloads per device, `load_raw_data()` to persist those into `raw.ingests` (returning an `ingest_id` per device), `transform.transform_device_data()` to run each device's payload through its registered parser (`transform/parsers/`, driven by `transform/registries/`), and finally `load_processed_data()` to upsert the resulting row-dicts into the destination tables (`fitbit.*` / `atmotube.*`) — resolving cross-table foreign keys (e.g. `sleep_stages` → `sleep_sessions`) along the way, and logging one `study.pipeline_runs` row per device via `general/run_logger.py` so failures are visible without reading stdout.
+The data pipeline starts from wherever the data is kept. `load.py`'s `__main__` block orchestrates the full run: it calls `extract.extract_all_devices()` to pull raw payloads per device, `load_raw_data()` to persist those into `raw.ingests` (returning an `ingest_id` per device), `transform.transform_device_data()` to run each device's payload through its registered parser (`transform/parse/`, driven by `transform/register/`), and finally `load_processed_data()` to upsert the resulting row-dicts into the destination tables (`fitbit.*` / `atmotube.*`) — resolving cross-table foreign keys (e.g. `sleep_stages` → `sleep_sessions`) along the way, and logging one `study.pipeline_runs` row per device via `general/run_logger.py` so failures are visible without reading stdout.
 
 [![Flow of Data from Multiple Devices](multidevice_dataflow.png)](multidevice_dataflow.png)
 
@@ -64,9 +64,8 @@ The data pipeline starts from wherever the data is kept. `load.py`'s `__main__` 
 │~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 │                              ## ETL PIPELINE
 ├── src/
-│   ├── main.py                    # currently just env-var validation (REQUIRED_ENV_VARS check) — the
-│   │                               # "start the scheduler, stay live" entrypoint described above isn't wired up here yet
-│   │
+│   ├── main.py                    # currently just env-var validation (REQUIRED_ENV_VARS check) — "start the scheduler, stay live" entrypoint isn't wired up yet
+│   │                              
 │   ├── general/
 │   │   ├── __init__.py
 │   │   ├── device_registry.py     # load_devices(): flattens config/devices.yml's *_devices lists, resolves !ENV tags
@@ -99,13 +98,13 @@ The data pipeline starts from wherever the data is kept. `load.py`'s `__main__` 
 │   │   ├── transform.py           # transform_device_data(): device_type → parser via DEVICE_REGISTRY;
 │   │   │                          # calls parser.parse(payload, device_id, timezone) uniformly; output is
 │   │   │                          # { device_type: { device_id: { "data": { table_name: [ {row}, ... ] } } } }
-│   │   ├── utils.py               # JSON-blob flattening, GIS/timezone column auto-detection (used inside parsers)
-│   │   ├── parsers/
+│   │   ├── utils.py               # JSON-blob flattening, GIS/timezone column auto-detection (used inside parse)
+│   │   ├── parse/
 │   │   │   ├── __init__.py
 │   │   │   ├── atmotube_parser.py
 │   │   │   ├── fitbit_parser.py
 │   │   │   └── DEPRECIATEDponyopi_parser.py   # disabled; not imported by transform.py
-│   │   └── registries/
+│   │   └── register/
 │   │       ├── __init__.py
 │   │       ├── atmotube_registry.py   # raw_key -> (standard_name, unit, dtype, category) per field
 │   │       └── fitbit_registry.py     # declarative rules for the ~15 Fitbit data types that reduce to a lookup shape
@@ -120,7 +119,7 @@ The data pipeline starts from wherever the data is kept. `load.py`'s `__main__` 
 │           ├── 00_schemas.sql
 │           ├── 01_raw.sql         # raw.ingests — append-only log of every pipeline pull, JSONB payload
 │           ├── 02_study.sql       # study.devices, study.pipeline_runs, etc.
-│           ├── 03_atmotube.sql    # atmotube.readings — one wide table, PostGIS location column
+│           ├── 03_atmotube.sql    # atmotube.readings — one table (+ adds PostGIS location column)
 │           └── 04_fitbit.sql      # fitbit.readings / states / sleep_sessions / sleep_stages / exercise_sessions / profile
 │
 │~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -150,14 +149,14 @@ The data pipeline starts from wherever the data is kept. `load.py`'s `__main__` 
 
 ```
 git clone <repo-url>
-cd multidevice_dataToolkit
+cd multidevice_datakit
 ```
 
 ## 2. Create the conda env — this also installs the package (via the -e .[docs] line inside environment.yml)
 
 ```
 conda env create -f environment.yml
-conda activate multidevice_dataToolkit
+conda activate multidevice_dataviz
 ```
 
 ## 3. Set up local secrets
