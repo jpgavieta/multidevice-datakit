@@ -1,7 +1,0 @@
-pandas
-sqlalchemy
-psycopg2-binary
-pyyaml
-python-dotenv
-tenacity
-requests

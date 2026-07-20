@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from .registry.fitbit_registry import FITBIT_REGISTRY, BESPOKE_DATA_TYPES, UNMAPPED_DATA_TYPES
+from ..register.fitbit_registry import FITBIT_REGISTRY, BESPOKE_DATA_TYPES, UNMAPPED_DATA_TYPES
 
 
 def _to_camel(data_type: str) -> str:

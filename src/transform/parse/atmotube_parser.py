@@ -15,7 +15,7 @@ WKT_COLUMNS mapping in _upsert_rows()), so both keys survive this parser only
 to be popped by load.py's _prepare_atmotube_rows() once the geometry's built.
 """
 
-from .registry.atmotube_registry import ATMOTUBE_REGISTRY
+from ..register.atmotube_registry import ATMOTUBE_REGISTRY
 
 
 def parse(raw_data: dict, device_id: str, timezone: str | None = None) -> dict:

@@ -1,4 +1,0 @@
-extract
-general
-load
-transform

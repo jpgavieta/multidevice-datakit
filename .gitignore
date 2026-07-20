@@ -42,4 +42,6 @@ deploy/grafana/grafana-data/
 #!deploy/grafana/dashboard-json/*.json
 .json
 
+*.egg-info
+
 .gitattributes   
